@@ -38,13 +38,17 @@
   #boot .bar { width: 220px; height: 8px; border-radius: 6px; background: rgba(255,255,255,.3); overflow: hidden; }
   #boot .bar i { display: block; height: 100%; width: 40%; background: #ffd66b; border-radius: 6px; animation: load 1.1s ease-in-out infinite; }
   @keyframes load { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
-  #rotate {
-    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: none; align-items: center; gap: 10px;
-    padding: 10px 12px 10px 16px; border-radius: 14px; background: rgba(11,29,58,.8); color: #fff; font-size: 15px;
-    border: 1px solid rgba(255,214,107,.7); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); z-index: 5; white-space: nowrap;
-  }
-  #rotate button { all: unset; cursor: pointer; color: #ffd66b; font-size: 18px; padding: 0 6px; }
-  @media (orientation: portrait) and (max-width: 900px) { #rotate.show { display: flex; } }
+  #rotate { position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:28px; background:rgba(8,29,62,.95); color:#fff; text-align:center; font-size:22px; font-weight:800; z-index:50; }
+  #rotate .phone { display:block; font-size:72px; margin-bottom:14px; animation: turn-phone 1.5s ease-in-out infinite; }
+  @keyframes turn-phone { 50% { transform:rotate(90deg); } }
+  #profileGate { position:fixed; inset:0; z-index:60; display:none; place-items:center; padding:20px; background:rgba(8,29,62,.7); backdrop-filter:blur(7px); }
+  #profileGate.show { display:grid; }
+  .profile-card { width:min(420px,100%); padding:28px 24px; border:4px solid #fff; border-radius:28px; background:linear-gradient(160deg,#fff6ae,#ffd45b); box-shadow:0 10px 0 #b47a11; color:#163b68; text-align:center; }
+  .profile-card .mascot { font-size:64px; line-height:1; }.profile-card h1 { margin:7px 0 4px; font-size:30px; }.profile-card p { margin:0 0 16px; font-size:17px; line-height:1.4; }
+  .profile-card input { width:100%; padding:13px 15px; border:3px solid #366b9d; border-radius:14px; font:700 20px 'Kanit',Tahoma,sans-serif; text-align:center; color:#163b68; outline:none; }
+  .profile-card button { width:100%; margin-top:12px; padding:12px; border:0; border-radius:14px; background:#38a34a; box-shadow:0 4px 0 #1f6e2b; color:#fff; font:800 21px 'Kanit',Tahoma,sans-serif; cursor:pointer; }
+  .profile-card small { display:block; margin-top:13px; font-size:13px; color:#355b7c; }
+  @media (orientation: portrait) and (max-width: 900px) { #rotate.show { display:flex; } }
 </style>
 </head>
 <body>
@@ -53,8 +57,9 @@
   <div id="game"></div>
   <div id="vignette"></div>
   <div id="boot">กำลังโหลดเกม…<div class="bar"><i></i></div><small>Phaser 3 + Matter.js</small></div>
-  <div id="rotate" class="show">📱 หมุนจอเป็นแนวนอนจะเล่นสนุกกว่า <button type="button" aria-label="ปิด" onclick="this.parentNode.remove()">✕</button></div>
+  <div id="rotate" class="show"><div><span class="phone">📱</span>หมุนเครื่องเป็นแนวนอน<br><small>เพื่อเล่นเกมได้เต็มหน้าจอ</small></div></div>
 </div>
+<div id="profileGate" aria-label="ตั้งชื่อเล่น"><form class="profile-card" id="profileForm"><div class="mascot">🐦⭐</div><h1>สวัสดี นักบินน้อย!</h1><p>พิมพ์ชื่อเล่นเพื่อเก็บคะแนนของหนูในเครื่องนี้</p><input id="nickname" maxlength="12" autocomplete="off" inputmode="text" placeholder="ชื่อเล่น" aria-label="ชื่อเล่น"><button type="submit">เริ่มเล่น</button><small>ชื่อเล่นและคะแนนจะบันทึกเฉพาะในอุปกรณ์นี้</small></form></div>
 
 <!-- Phaser 3 จาก CDN (หลัก jsDelivr / สำรอง cdnjs) — มี Matter.js อยู่ในไฟล์นี้แล้ว -->
 <script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
@@ -252,29 +257,74 @@ const LEVELS = [
 // ═══════════════════════════ 2) บันทึก / เสียง / เต็มจอ ═══════════════════════════
 const Save = {
   key: 'slingshot-pigs-save-v2',
-  data: { unlocked: 1, best: {}, seen: {} },
+  data: { active: '', profiles: {} },
+  blankProfile() { return { unlocked: 1, best: {}, seen: {} }; },
   load() {
     try {
       const s = JSON.parse(localStorage.getItem(this.key) || 'null');
-      if (s && typeof s === 'object') this.data = Object.assign({ unlocked: 1, best: {}, seen: {} }, s);
+      if (s && typeof s === 'object') {
+        if (s.profiles && typeof s.profiles === 'object') this.data = Object.assign({ active: '', profiles: {} }, s);
+        else if (s.best || s.unlocked || s.seen) this.data = { active: '', profiles: { 'ผู้เล่นเดิม': Object.assign(this.blankProfile(), s) } };
+      }
     } catch (e) { /* โหมดส่วนตัว / บล็อกคุกกี้ → เล่นได้แต่ไม่จำ */ }
   },
   save() { try { localStorage.setItem(this.key, JSON.stringify(this.data)); } catch (e) {} },
-  best(i) { return this.data.best[i] || { stars: 0, score: 0 }; },
+  profile() {
+    const name = this.data.active;
+    if (!name) return this.blankProfile();
+    if (!this.data.profiles[name]) this.data.profiles[name] = this.blankProfile();
+    return this.data.profiles[name];
+  },
+  setProfile(name) {
+    const clean = Array.from(String(name || '').trim()).slice(0, 12).join('');
+    if (!clean) return false;
+    this.data.active = clean;
+    this.profile(); this.save();
+    return true;
+  },
+  name() { return this.data.active || 'นักบินน้อย'; },
+  best(i) { return this.profile().best[i] || { stars: 0, score: 0 }; },
   record(i, stars, score) {
+    const p = this.profile();
     const b = this.best(i), isNew = score > b.score;
-    this.data.best[i] = { stars: Math.max(b.stars, stars), score: Math.max(b.score, score) };
-    this.data.unlocked = Math.max(this.data.unlocked, Math.min(LEVELS.length, i + 2));
+    p.best[i] = { stars: Math.max(b.stars, stars), score: Math.max(b.score, score) };
+    p.unlocked = Math.max(p.unlocked, Math.min(LEVELS.length, i + 2));
     this.save();
     return isNew;
   },
-  totalStars() { return Object.values(this.data.best).reduce((a, b) => a + (b.stars || 0), 0); },
-  totalScore() { return Object.values(this.data.best).reduce((a, b) => a + (b.score || 0), 0); },
+  totalStars() { return Object.values(this.profile().best).reduce((a, b) => a + (b.stars || 0), 0); },
+  totalScore() { return Object.values(this.profile().best).reduce((a, b) => a + (b.score || 0), 0); },
   nextLevel() {
-    for (let i = 0; i < this.data.unlocked; i++) if (!this.best(i).stars) return i;
-    return Math.min(this.data.unlocked, LEVELS.length) - 1;
+    const p = this.profile();
+    for (let i = 0; i < p.unlocked; i++) if (!this.best(i).stars) return i;
+    return Math.min(p.unlocked, LEVELS.length) - 1;
   },
+  unlocked() { return this.profile().unlocked; },
+  markSeen(type) { this.profile().seen[type] = true; this.save(); },
+  seen(type) { return !!this.profile().seen[type]; },
 };
+
+const ProfileGate = {
+  el: document.getElementById('profileGate'), input: document.getElementById('nickname'),
+  onReady: null,
+  showIfNeeded() {
+    if (Save.data.active) return;
+    this.el.classList.add('show');
+    setTimeout(() => this.input.focus(), 80);
+  },
+  close() { this.el.classList.remove('show'); },
+};
+document.getElementById('profileForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  if (Save.setProfile(ProfileGate.input.value)) {
+    try { screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape').catch(() => {}); } catch (x) {}
+    ProfileGate.close();
+    const ready = ProfileGate.onReady; ProfileGate.onReady = null;
+    if (ready) ready();
+  } else {
+    ProfileGate.input.focus();
+  }
+});
 
 const Sfx = {
   ctx: null, enabled: true, last: {}, _noise: null,
@@ -1226,8 +1276,8 @@ class GameScene extends Phaser.Scene {
   onBirdReady(type) {
     if (!this.ui) return;
     this.ui.setAbility(type, 'ready');
-    if (BIRD_TYPES[type].ability && !Save.data.seen[type]) {
-      Save.data.seen[type] = true; Save.save();
+    if (BIRD_TYPES[type].ability && !Save.seen(type)) {
+      Save.markSeen(type);
       this.ui.showNewBird(type);
     }
   }
@@ -1730,8 +1780,8 @@ class UIScene extends Phaser.Scene {
     let x = -30;
     for (const k of kinds) {
       if (k === 'fs' && !FS.available) continue;
-      const cb = { fs: () => FS.toggle(), sound: () => this.toggleSound(), restart: () => this.gs.restartLevel(), pause: () => this.togglePause(), menu: () => this.gs.goMenu(false) }[k];
-      const b = makeIconButton(this, x, 30, k === 'menu' ? 'home' : k, cb, k === 'sound' ? Sfx.enabled : FS.active());
+      const cb = { fs: () => FS.toggle(), sound: () => this.toggleSound(), restart: () => this.gs.restartLevel(), pause: () => this.togglePause(), menu: () => this.gs.goMenu(false), exit: () => { location.href = 'index.html'; } }[k];
+      const b = makeIconButton(this, x, 30, (k === 'menu' || k === 'exit') ? 'home' : k, cb, k === 'sound' ? Sfx.enabled : FS.active());
       if (k === 'fs') this.fsBtn = b;
       if (k === 'sound') this.soundBtn = b;
       c.add(b);
@@ -1754,7 +1804,7 @@ class UIScene extends Phaser.Scene {
     this.tl.add(this.scoreText);
     this.tl.add(txt(this, 394, 52, best ? `สถิติ ${fmt(best)}` : '', 18, '#bcd6ff').setOrigin(1, 0));
 
-    this.tr = this.topRightButtons(['fs', 'sound', 'restart', 'pause']);
+    this.tr = this.topRightButtons(['exit', 'fs', 'sound', 'restart', 'pause']);
     const pill = this.add.graphics(); const pw = 132, px = this.tr.leftEdge - 14 - pw;
     glassPanel(pill, px, 2, pw, 56, 28);
     this.tr.add(pill);
@@ -1889,7 +1939,7 @@ class UIScene extends Phaser.Scene {
     const box = this.openModal('หยุดชั่วคราว', '#ffd66b', 560, 420);
     box.add(makeButton(this, 0, -30, 'เล่นต่อ', () => this.togglePause(), { w: 300, color: 0x2b8a3e }));
     box.add(makeButton(this, 0, 60, 'เริ่มด่านนี้ใหม่', () => gs.restartLevel(), { w: 300, color: 0x31507e }));
-    box.add(makeButton(this, 0, 150, 'เลือกด่าน', () => gs.goMenu(true), { w: 300, color: 0x31507e }));
+    box.add(makeButton(this, 0, 150, 'ออกเกมกลับหน้าหลัก', () => { location.href = 'index.html'; }, { w: 300, color: 0x31507e }));
   }
 
   showResult(r) {
@@ -1913,7 +1963,7 @@ class UIScene extends Phaser.Scene {
       const bt = txt(this, 0, 68, r.isNew ? 'สถิติใหม่!' : `สถิติ ${fmt(r.best)}`, r.isNew ? 26 : 22, r.isNew ? '#ffd66b' : '#bcd6ff', { weight: r.isNew ? 800 : 400 }).setOrigin(0.5);
       box.add(bt);
       if (r.isNew) this.tweens.add({ targets: bt, scale: { from: 0.9, to: 1.1 }, duration: 500, yoyo: true, repeat: -1 });
-      box.add(makeButton(this, -210, 158, 'เลือกด่าน', () => gs.goMenu(true), { w: 180, color: 0x31507e, size: 23 }));
+      box.add(makeButton(this, -210, 158, 'ออกเกม', () => { location.href = 'index.html'; }, { w: 180, color: 0x31507e, size: 23 }));
       box.add(makeButton(this, 0, 158, 'เล่นซ้ำ', () => gs.restartLevel(), { w: 180, color: 0x31507e, size: 23 }));
       if (r.last) box.add(makeButton(this, 210, 158, 'เมนูหลัก', () => gs.goMenu(false), { w: 180, color: 0x2b8a3e, size: 23 }));
       else box.add(makeButton(this, 210, 158, 'ด่านถัดไป »', () => gs.nextLevel(), { w: 180, color: 0x2b8a3e, size: 23 }));
@@ -1924,7 +1974,7 @@ class UIScene extends Phaser.Scene {
       this.tweens.add({ targets: smug, angle: { from: -9, to: 9 }, duration: 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       box.add(txt(this, 0, 4, `เหลืออีก ${r.pigsLeft} ตัว · นกหมดแล้ว`, 30, '#ffffff', { weight: 600 }).setOrigin(0.5));
       box.add(txt(this, 0, 52, `คะแนน ${fmt(r.score)}`, 24, '#cfe3ff').setOrigin(0.5));
-      box.add(makeButton(this, -120, 158, 'เลือกด่าน', () => gs.goMenu(true), { w: 200, color: 0x31507e, size: 23 }));
+      box.add(makeButton(this, -120, 158, 'ออกเกม', () => { location.href = 'index.html'; }, { w: 200, color: 0x31507e, size: 23 }));
       box.add(makeButton(this, 120, 158, 'ลองอีกครั้ง', () => gs.restartLevel(), { w: 220, color: 0xc0392b, size: 23 }));
     }
   }
@@ -1938,7 +1988,7 @@ class UIScene extends Phaser.Scene {
     this.tweens.add({ targets: title, y: -210, duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     this.menu.add(txt(this, 0, -112, 'เกมหนังสติ๊กยิงนก · ฟิสิกส์จริงด้วย Phaser 3 + Matter.js', 24, '#ffffff', { weight: 600, stroke: '#0b1d3a', st: 6 }).setOrigin(0.5));
     const sg = this.add.graphics(); drawStar(sg, 0, 0, 17, true);
-    const stars = txt(this, 0, 0, `${Save.totalStars()} / ${LEVELS.length * 3}   ·   คะแนนรวม ${fmt(Save.totalScore())}`, 24, '#ffffff', { weight: 600, stroke: '#0b1d3a', st: 6 }).setOrigin(0, 0.5);
+    const stars = txt(this, 0, 0, `${Save.name()}  ·  ${Save.totalStars()} / ${LEVELS.length * 3}   ·   คะแนนรวม ${fmt(Save.totalScore())}`, 24, '#ffffff', { weight: 600, stroke: '#0b1d3a', st: 6 }).setOrigin(0, 0.5);
     const rowW = 40 + stars.width;
     sg.setPosition(-rowW / 2 + 17, -52); stars.setPosition(-rowW / 2 + 42, -52);
     this.menu.add([sg, stars]);
@@ -1946,7 +1996,7 @@ class UIScene extends Phaser.Scene {
     const label = Save.totalStars() ? `เล่นต่อ · ด่าน ${next + 1}` : 'เริ่มเล่น';
     this.menu.add(makeButton(this, 0, 50, label, () => gs.playLevel(next), { w: 340, h: 82, size: 34, color: 0x2b8a3e }));
     this.menu.add(makeButton(this, 0, 150, 'เลือกด่าน', () => this.showLevelSelect(), { w: 280, h: 66, size: 26, color: 0x31507e }));
-    this.trMenu = this.topRightButtons(['fs', 'sound']);
+    this.trMenu = this.topRightButtons(['exit', 'fs', 'sound']);
     this.help = txt(this, 0, 0, 'F = เต็มจอ  ·  M = เปิด/ปิดเสียง  ·  Enter = เล่น', 17, '#ffffff', { stroke: '#0b1d3a', st: 4 }).setOrigin(0.5, 1).setAlpha(0.85);
   }
 
@@ -1957,7 +2007,7 @@ class UIScene extends Phaser.Scene {
     LEVELS.forEach((L, i) => {
       const col = i % 5, row = Math.floor(i / 5);
       const x = (col - 2) * 146, y = -52 + row * 168;
-      const locked = i >= Save.data.unlocked, best = Save.best(i);
+      const locked = i >= Save.unlocked(), best = Save.best(i);
       const c = this.add.container(x, y);
       const g = this.add.graphics();
       g.fillStyle(0x000000, 0.2).fillRoundedRect(-60, -56, 120, 132, 18);
@@ -1991,6 +2041,7 @@ class UIScene extends Phaser.Scene {
 // ═══════════════════════════ เริ่มเกม ═══════════════════════════
 function start() {
   Save.load();
+  const startGame = () => {
   const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent: 'game',
@@ -2020,6 +2071,9 @@ function start() {
   document.addEventListener('fullscreenchange', () => setTimeout(fit, 80));
   document.addEventListener('webkitfullscreenchange', () => setTimeout(fit, 80));
   window.addEventListener('keydown', (e) => { if ((e.key === 'f' || e.key === 'F') && !e.repeat) FS.toggle(); });
+  };
+  if (Save.data.active) startGame();
+  else { ProfileGate.onReady = startGame; ProfileGate.showIfNeeded(); }
 }
 // รอฟอนต์ไทยโหลดก่อนวาดข้อความบน canvas — ออฟไลน์/ช้าเกิน 2.5 วิ ใช้ฟอนต์สำรอง
 const fontsReady = document.fonts
