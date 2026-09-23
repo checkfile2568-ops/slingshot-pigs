@@ -1,0 +1,2032 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#1f6fc4">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="ถล่มป้อมหมูโจร — เกมหนังสติ๊กยิงนก ฟิสิกส์จริงด้วย Phaser 3 + Matter.js เล่นบนเบราว์เซอร์ได้ทันที">
+<title>ถล่มป้อมหมูโจร · เกมหนังสติ๊ก Phaser 3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  html, body {
+    margin: 0; height: 100%; overflow: hidden; background: #0b1d3a;
+    touch-action: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
+    font-family: 'Kanit', 'TH Sarabun New', Tahoma, sans-serif;
+  }
+  #app { position: fixed; inset: 0; overflow: hidden; background: #2f86d8; }
+  /* ท้องฟ้า + ดวงอาทิตย์ วาดด้วย CSS → เต็มจอทุกสัดส่วนเสมอ (canvas โปร่งใสทับด้านบน) */
+  #sky {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(circle at 80% 13%, rgba(255,252,228,1) 0, rgba(255,240,170,.95) 3.2%, rgba(255,228,140,.45) 9%, rgba(255,228,140,0) 26%),
+      linear-gradient(180deg, #1f6fc4 0%, #3f98e4 28%, #86c9f6 62%, #cfeeff 88%, #eaf8ff 100%);
+  }
+  #game { position: absolute; inset: 0; }
+  #game canvas { display: block; }
+  #vignette { position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at 50% 45%, rgba(0,0,0,0) 62%, rgba(4,14,38,.30) 100%); }
+  #boot {
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 12px; color: #fff; font-size: 26px; text-shadow: 0 2px 8px rgba(0,0,0,.35); text-align: center; padding: 16px;
+  }
+  #boot small { color: #e8f4ff; font-size: 15px; }
+  #boot .bar { width: 220px; height: 8px; border-radius: 6px; background: rgba(255,255,255,.3); overflow: hidden; }
+  #boot .bar i { display: block; height: 100%; width: 40%; background: #ffd66b; border-radius: 6px; animation: load 1.1s ease-in-out infinite; }
+  @keyframes load { 0% { transform: translateX(-100%); } 100% { transform: translateX(260%); } }
+  #rotate {
+    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: none; align-items: center; gap: 10px;
+    padding: 10px 12px 10px 16px; border-radius: 14px; background: rgba(11,29,58,.8); color: #fff; font-size: 15px;
+    border: 1px solid rgba(255,214,107,.7); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); z-index: 5; white-space: nowrap;
+  }
+  #rotate button { all: unset; cursor: pointer; color: #ffd66b; font-size: 18px; padding: 0 6px; }
+  @media (orientation: portrait) and (max-width: 900px) { #rotate.show { display: flex; } }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="sky"></div>
+  <div id="game"></div>
+  <div id="vignette"></div>
+  <div id="boot">กำลังโหลดเกม…<div class="bar"><i></i></div><small>Phaser 3 + Matter.js</small></div>
+  <div id="rotate" class="show">📱 หมุนจอเป็นแนวนอนจะเล่นสนุกกว่า <button type="button" aria-label="ปิด" onclick="this.parentNode.remove()">✕</button></div>
+</div>
+
+<!-- Phaser 3 จาก CDN (หลัก jsDelivr / สำรอง cdnjs) — มี Matter.js อยู่ในไฟล์นี้แล้ว -->
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
+<script>window.Phaser || document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.90.0/phaser.min.js"><\/script>');</script>
+
+<script>
+/* =====================================================================
+ *  ถล่มป้อมหมูโจร — เกมหนังสติ๊กยิงนก (แนว Angry Birds)  v2
+ *  Engine : Phaser 3.90 + Matter.js
+ *
+ *  โครงสร้าง
+ *   1) ค่าคงที่ / วัสดุ / หมู / นก / ด่าน        ← 🔧 ต่อยอด ได้ง่ายที่สุดตรงนี้
+ *   2) บันทึกความคืบหน้า (localStorage) / เสียง / เต็มจอ
+ *   3) วาดกราฟิกทั้งหมดด้วยโค้ด (ไม่มีไฟล์รูป) — วาดที่ 2 เท่าแล้วย่อ → คมบนจอ Retina
+ *   4) ฉาก: Boot → Title (+UI เมนู) → Game (+UI HUD)
+ *
+ *  ฟิสิกส์ fixed timestep 60Hz + sleeping → ตึกนิ่งตอนเริ่ม และเร็วเท่ากันทุกจอ
+ *  จุดต่อยอดในโค้ดมีป้าย  🔧 ต่อยอด  ให้ค้นหาได้ทันที
+ * ===================================================================== */
+(function () {
+'use strict';
+const bootEl = document.getElementById('boot');
+if (!window.Phaser) {
+  bootEl.innerHTML = 'โหลด Phaser จาก CDN ไม่สำเร็จ<small>ตรวจสอบการเชื่อมต่ออินเทอร์เน็ต แล้วรีเฟรชหน้านี้</small>';
+  return;
+}
+
+// ═══════════════════════════ 1) ค่าคงที่ ═══════════════════════════
+const DPR = Math.min(window.devicePixelRatio || 1, 2);   // เรนเดอร์ตามความละเอียดจอจริง (จำกัด 2 เพื่อความลื่น)
+const TEX = 2;                                           // พื้นผิวทุกชิ้นวาดที่ 2 เท่าแล้วย่อ → คมเมื่อกล้องซูม
+const VIEW_H = 720;                                      // ความสูงของโลกที่ต้องเห็นครบเสมอ
+const MIN_VIEW_W = 1000;                                 // ความกว้างโลกขั้นต่ำที่ต้องเห็น (จอแคบจะซูมออก)
+const GROUND_Y = 640, WORLD_BOTTOM = 720, WORLD_LEFT = -40;
+const STEP_MS = 1000 / 60;
+const GRAVITY_STEP = 0.001 * STEP_MS * STEP_MS;          // ความเร่งโน้มถ่วง px/step² — ใช้คำนวณเส้นเล็งให้ตรงกับ Matter
+const FONT = 'Kanit, "TH Sarabun New", Tahoma, sans-serif';
+const TAU = Math.PI * 2;
+const GOLD = 0xffd66b, NAVY = 0x0b1d3a;
+const UI_RES = Math.max(2, Math.ceil(DPR * 1.4));
+
+const SLING = { x: 210, y: GROUND_Y - 116 };
+const TIP_BACK  = { x: SLING.x + 15, y: GROUND_Y - 114 };
+const TIP_FRONT = { x: SLING.x - 15, y: GROUND_Y - 112 };
+
+const CFG = {
+  sling:     { maxPull: 115, power: 0.165, minPull: 18, grabRadius: 75 },
+  birdAir:   0.004,
+  damage:    { threshold: 0.9, scale: 12, birdMultiplier: 1.25, graceSteps: 90 },
+  explosion: { radius: 150, force: 17, damage: 150 },    // นกประทัด
+  tnt:       { radius: 120, force: 14, damage: 110 },    // ลัง TNT (เบากว่านกประทัดเล็กน้อย)
+  birdBonus: 10000,
+};
+
+// 🔧 ต่อยอด: วัสดุ — เพิ่มชนิดใหม่แล้วเพิ่มวิธีวาดใน drawBlock()
+const MATERIALS = {
+  wood:  { name: 'ไม้',       hp: 55,  density: 0.0012, friction: 0.8, restitution: 0.05, score: 500,  chip: 'chip_wood',  popup: '#ffcf8a', sfx: 'wood' },
+  glass: { name: 'กระจก',    hp: 22,  density: 0.0010, friction: 0.5, restitution: 0.05, score: 300,  chip: 'chip_glass', popup: '#bfeaff', sfx: 'glass' },
+  stone: { name: 'หิน',       hp: 130, density: 0.0030, friction: 0.9, restitution: 0.02, score: 800,  chip: 'chip_stone', popup: '#e3e7ea', sfx: 'stone' },
+  metal: { name: 'เหล็ก',     hp: 380, density: 0.0050, friction: 0.6, restitution: 0.05, score: 1500, chip: 'chip_metal', popup: '#dfe8f2', sfx: 'metal' },
+  tnt:   { name: 'ลังระเบิด', hp: 14,  density: 0.0010, friction: 0.8, restitution: 0.05, score: 1000, chip: 'chip_tnt',   popup: '#ffb199', sfx: null, explosive: true },
+  rock:  { name: 'หินผา', static: true, friction: 0.9, restitution: 0.05 },            // พื้นยกสูง ทำลายไม่ได้
+};
+
+// 🔧 ต่อยอด: ชนิดหมู
+const PIG_TYPES = {
+  small:  { r: 16, hp: 14, score: 3000,  density: 0.0012 },
+  normal: { r: 22, hp: 20, score: 5000,  density: 0.0012 },
+  helmet: { r: 22, hp: 48, score: 7000,  density: 0.0014, helmet: true },
+  boss:   { r: 30, hp: 60, score: 10000, density: 0.0015, bandana: true },
+};
+
+// 🔧 ต่อยอด: ชนิดนก + ความสามารถพิเศษ (ดู useAbility())  vs = ตัวคูณความเสียหายต่อวัสดุ
+const BIRD_TYPES = {
+  pilot:  { name: 'นกนักบิน',  r: 19, tex: 56, density: 0.0040, restitution: 0.30, ability: null,    verb: '',          info: 'ยิงแรง ทะลวงได้ทุกวัสดุ', vs: {} },
+  dash:   { name: 'นกลมกรด',  r: 18, tex: 56, density: 0.0035, restitution: 0.25, ability: 'dash',  verb: 'พุ่งทะยาน', info: 'แตะจอระหว่างบิน = พุ่งเร็ว 2 เท่า · ถนัดทะลวงไม้', vs: { wood: 1.8 } },
+  triple: { name: 'นกแฝดสาม', r: 14, tex: 42, density: 0.0045, restitution: 0.30, ability: 'split', verb: 'แยกร่าง',   info: 'แตะจอระหว่างบิน = แยกเป็น 3 ตัว · ถนัดทุบกระจก', vs: { glass: 2.2 } },
+  boom:   { name: 'นกประทัด', r: 21, tex: 60, density: 0.0040, restitution: 0.20, ability: 'boom',  verb: 'ระเบิด',    info: 'แตะจอ = ระเบิด! (ชนแล้วจะระเบิดเองใน 2 วินาที)', vs: {} },
+};
+
+// ───── ตัวช่วยสร้างด่าน:  y = ระยะจาก "พื้น" ถึง "ขอบล่าง" ของชิ้นงาน ─────
+const blk  = (m, x, y, w, h) => ({ k: 'block', m, x, y, w, h, shape: 'rect' });
+const tri  = (m, x, y, w, h) => ({ k: 'block', m, x, y, w, h, shape: 'tri' });
+const ball = (m, x, y, d)    => ({ k: 'block', m, x, y, w: d, h: d, shape: 'ball' });
+const rock = (x, y, w, h)    => ({ k: 'block', m: 'rock', x, y, w, h, shape: 'rect' });
+const pig  = (x, y, type = 'normal') => ({ k: 'pig', x, y, type });
+/** ห้อง 1 ชั้น = เสา 2 ต้น + คาน → คืนค่าความสูงขอบบนคาน (ใช้เป็นฐานชั้นถัดไป) */
+function room(list, cx, base, span, postH, postMat = 'wood', beamMat = postMat, postW = 20, beamH = 20) {
+  list.push(blk(postMat, cx - span / 2 + postW / 2, base, postW, postH));
+  list.push(blk(postMat, cx + span / 2 - postW / 2, base, postW, postH));
+  list.push(blk(beamMat, cx, base + postH, span, beamH));
+  return base + postH + beamH;
+}
+
+// ═══════════════════════════ ด่านทั้งหมด ═══════════════════════════
+// 🔧 ต่อยอด: เพิ่มด่าน = push object ใหม่ { name, width, birds:[...], build(o){...} }
+//            ระบบเลือกด่าน / ปลดล็อก / ดาว รองรับอัตโนมัติ
+const LEVELS = [
+  { name: 'ฝึกยิง', width: 1400, birds: ['pilot', 'pilot', 'pilot'],
+    build(o) {
+      const t = room(o, 900, 0, 160, 100);
+      o.push(pig(900, 0), pig(900, t));
+      o.push(blk('wood', 1070, 0, 40, 40), blk('wood', 1070, 40, 40, 40), pig(1070, 80, 'small'));
+    } },
+  { name: 'หอคอยแฝด', width: 1450, birds: ['pilot', 'dash', 'pilot'],
+    build(o) {
+      let t = room(o, 840, 0, 120, 90);
+      t = room(o, 840, t, 120, 80, 'glass', 'wood');
+      o.push(pig(840, t));
+      const u = room(o, 1060, 0, 140, 100);
+      o.push(pig(1060, 0), blk('glass', 1040, u, 40, 40), blk('glass', 1080, u, 40, 40), pig(1060, u + 40));
+    } },
+  { name: 'ป้อมหิน', width: 1500, birds: ['dash', 'pilot', 'dash', 'pilot'],
+    build(o) {
+      const a = room(o, 880, 0, 180, 80, 'stone', 'wood');
+      room(o, 1060, 0, 180, 80, 'stone', 'wood');
+      o.push(pig(880, 0), pig(1060, 0));
+      o.push(tri('wood', 815, a, 50, 40), tri('wood', 1125, a, 50, 40));
+      const b = room(o, 970, a, 200, 80);
+      o.push(pig(970, a), blk('glass', 970, b, 40, 40), pig(970, b + 40));
+    } },
+  { name: 'ปราสาทกระจก', width: 1500, birds: ['triple', 'triple', 'pilot'],
+    build(o) {
+      room(o, 830, 0, 140, 90, 'glass', 'wood');
+      room(o, 970, 0, 140, 90);
+      room(o, 1110, 0, 140, 90, 'glass', 'wood');
+      o.push(pig(830, 0, 'small'), pig(1110, 0, 'small'));
+      room(o, 900, 110, 140, 80, 'glass', 'wood');
+      room(o, 1040, 110, 140, 80, 'glass', 'wood');
+      const top = room(o, 970, 210, 140, 70, 'wood', 'stone');
+      o.push(pig(970, 210), pig(970, top));
+    } },
+  { name: 'ลังระเบิด', width: 1600, birds: ['pilot', 'boom', 'dash', 'pilot'],
+    build(o) {
+      const a = room(o, 1000, 0, 260, 110, 'stone');
+      o.push(blk('tnt', 935, 0, 40, 40), pig(1000, 0), blk('tnt', 1065, 0, 40, 40));
+      const b = room(o, 1000, a, 200, 90);
+      o.push(pig(1000, a, 'helmet'), pig(1000, b));
+      const c = room(o, 790, 0, 100, 80, 'glass', 'wood');
+      o.push(blk('wood', 790, 0, 40, 40), pig(790, c, 'small'));
+    } },
+  { name: 'ปราสาทเหล็ก', width: 1700, birds: ['boom', 'pilot', 'boom', 'dash'],
+    build(o) {
+      o.push(blk('metal', 870, 0, 20, 120));
+      let a = room(o, 1020, 0, 180, 110, 'metal', 'stone');
+      o.push(pig(1020, 0, 'helmet'));
+      a = room(o, 1020, a, 160, 80, 'wood', 'metal');
+      o.push(pig(1020, 130), tri('wood', 1020, a, 120, 50));
+      o.push(pig(1150, 0, 'small'));
+      const t = room(o, 1250, 0, 120, 90, 'stone', 'wood');
+      o.push(blk('tnt', 1250, 0, 40, 40), pig(1250, t, 'helmet'));
+    } },
+  { name: 'เนินผา', width: 1800, birds: ['dash', 'pilot', 'triple', 'boom', 'pilot'],
+    build(o) {
+      o.push(rock(1160, 0, 440, 150));
+      room(o, 820, 0, 100, 70);
+      o.push(pig(820, 0, 'small'));
+      const a = room(o, 1060, 150, 150, 90);
+      o.push(pig(1060, 150), ball('stone', 1015, a, 36), pig(1085, a, 'helmet'));
+      const b = room(o, 1270, 150, 150, 90, 'glass', 'wood');
+      o.push(pig(1270, 150), pig(1270, b, 'small'));
+    } },
+  { name: 'สะพานไม้', width: 1800, birds: ['triple', 'pilot', 'dash', 'boom'],
+    build(o) {
+      for (const x of [900, 1060, 1220, 1380]) o.push(blk('wood', x, 0, 30, 120));
+      o.push(blk('wood', 980, 120, 160, 20), blk('wood', 1140, 120, 160, 20), blk('wood', 1300, 120, 160, 20));
+      o.push(pig(980, 0, 'small'), pig(1140, 0), pig(1300, 0, 'helmet'));
+      o.push(ball('stone', 960, 140, 40), pig(1140, 140), ball('stone', 1320, 140, 40));
+    } },
+  { name: 'หอคอยสูง', width: 1800, birds: ['dash', 'boom', 'pilot', 'triple', 'pilot'],
+    build(o) {
+      o.push(blk('glass', 980, 0, 20, 100));
+      let t = room(o, 1150, 0, 160, 100, 'stone', 'wood');
+      o.push(pig(1150, 0, 'helmet'));
+      const t1 = t; t = room(o, 1150, t, 140, 90);            o.push(pig(1150, t1));
+      const t2 = t; t = room(o, 1150, t, 120, 80, 'glass', 'wood'); o.push(pig(1150, t2, 'small'));
+      const t3 = t; t = room(o, 1150, t, 100, 70, 'wood', 'stone'); o.push(pig(1150, t3, 'small'));
+      o.push(tri('wood', 1150, t, 100, 50));
+      o.push(blk('tnt', 1330, 0, 40, 40), blk('tnt', 1330, 40, 40, 40), pig(1330, 80, 'small'));
+    } },
+  { name: 'ป้อมบอสหมูโจร', width: 1850, birds: ['pilot', 'dash', 'triple', 'boom', 'boom'],
+    build(o) {
+      o.push(blk('metal', 900, 0, 20, 100), blk('glass', 940, 0, 20, 80));
+      o.push(rock(1250, 0, 400, 60));
+      room(o, 1150, 60, 180, 120, 'stone', 'metal');
+      o.push(pig(1150, 60, 'boss'), blk('tnt', 1100, 60, 36, 36), blk('tnt', 1200, 60, 36, 36));
+      room(o, 1350, 60, 180, 120, 'wood', 'stone');
+      o.push(pig(1350, 60, 'helmet'));
+      const c = room(o, 1250, 200, 200, 90);
+      o.push(pig(1250, 200), pig(1250, c, 'small'));
+      const d = room(o, 1580, 0, 120, 100, 'glass', 'wood');
+      o.push(pig(1580, 0, 'small'), pig(1580, d));
+    } },
+];
+
+// ═══════════════════════════ 2) บันทึก / เสียง / เต็มจอ ═══════════════════════════
+const Save = {
+  key: 'slingshot-pigs-save-v2',
+  data: { unlocked: 1, best: {}, seen: {} },
+  load() {
+    try {
+      const s = JSON.parse(localStorage.getItem(this.key) || 'null');
+      if (s && typeof s === 'object') this.data = Object.assign({ unlocked: 1, best: {}, seen: {} }, s);
+    } catch (e) { /* โหมดส่วนตัว / บล็อกคุกกี้ → เล่นได้แต่ไม่จำ */ }
+  },
+  save() { try { localStorage.setItem(this.key, JSON.stringify(this.data)); } catch (e) {} },
+  best(i) { return this.data.best[i] || { stars: 0, score: 0 }; },
+  record(i, stars, score) {
+    const b = this.best(i), isNew = score > b.score;
+    this.data.best[i] = { stars: Math.max(b.stars, stars), score: Math.max(b.score, score) };
+    this.data.unlocked = Math.max(this.data.unlocked, Math.min(LEVELS.length, i + 2));
+    this.save();
+    return isNew;
+  },
+  totalStars() { return Object.values(this.data.best).reduce((a, b) => a + (b.stars || 0), 0); },
+  totalScore() { return Object.values(this.data.best).reduce((a, b) => a + (b.score || 0), 0); },
+  nextLevel() {
+    for (let i = 0; i < this.data.unlocked; i++) if (!this.best(i).stars) return i;
+    return Math.min(this.data.unlocked, LEVELS.length) - 1;
+  },
+};
+
+const Sfx = {
+  ctx: null, enabled: true, last: {}, _noise: null,
+  unlock() {
+    try {
+      if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      if (this.ctx.state === 'suspended') this.ctx.resume();
+    } catch (e) { this.ctx = null; }
+  },
+  _env(g, t, a, d, v) {
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(Math.max(v, 0.0002), t + a);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + a + d);
+  },
+  tone(f1, f2, dur, type, vol, delay = 0) {
+    const c = this.ctx, t = c.currentTime + delay;
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.setValueAtTime(f1, t);
+    if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + dur);
+    this._env(g, t, 0.01, dur, vol);
+    o.connect(g).connect(c.destination); o.start(t); o.stop(t + dur + 0.05);
+  },
+  noise(dur, vol, type, freq, q = 1, delay = 0) {
+    const c = this.ctx, t = c.currentTime + delay;
+    if (!this._noise) {
+      const b = c.createBuffer(1, c.sampleRate, c.sampleRate), d = b.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      this._noise = b;
+    }
+    const s = c.createBufferSource(); s.buffer = this._noise;
+    const f = c.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
+    const g = c.createGain(); this._env(g, t, 0.005, dur, vol);
+    s.connect(f).connect(g).connect(c.destination); s.start(t, Math.random() * 0.4); s.stop(t + dur + 0.05);
+  },
+  play(name, k = 1) {
+    if (!this.enabled || !this.ctx) return;
+    const now = performance.now();
+    if (this.last[name] && now - this.last[name] < 45) return;
+    this.last[name] = now;
+    k = Math.max(0.15, Math.min(1, k));
+    try {
+      switch (name) {
+        case 'stretch': this.tone(200, 320, 0.25, 'triangle', 0.07); break;
+        case 'launch':  this.noise(0.35, 0.25, 'bandpass', 900, 0.8); this.tone(520, 170, 0.25, 'sine', 0.07); break;
+        case 'hit':     this.noise(0.12, 0.22 * k, 'lowpass', 500); break;
+        case 'wood':    this.noise(0.18, 0.35, 'bandpass', 700, 2); this.tone(170, 90, 0.15, 'triangle', 0.18); break;
+        case 'glass':   this.tone(2200, 1800, 0.18, 'sine', 0.1); this.tone(3100, 2600, 0.12, 'sine', 0.07); this.noise(0.15, 0.18, 'highpass', 3000); break;
+        case 'stone':   this.noise(0.25, 0.45, 'lowpass', 260); this.tone(90, 50, 0.2, 'sine', 0.25); break;
+        case 'metal':   this.tone(520, 500, 0.25, 'square', 0.05); this.tone(1310, 1290, 0.3, 'triangle', 0.07); this.noise(0.1, 0.2, 'highpass', 3000); break;
+        case 'pig':     this.tone(640, 180, 0.25, 'square', 0.07); this.noise(0.12, 0.2, 'bandpass', 1200); break;
+        case 'poof':    this.noise(0.2, 0.12, 'highpass', 1500); break;
+        case 'dash':    this.tone(300, 1300, 0.25, 'sawtooth', 0.045); this.noise(0.3, 0.2, 'highpass', 2000); break;
+        case 'split':   [0, 0.06, 0.12].forEach((d) => this.tone(900, 1500, 0.08, 'square', 0.045, d)); break;
+        case 'boom':    this.noise(0.7, 0.6, 'lowpass', 420); this.tone(130, 38, 0.55, 'sine', 0.38); this.noise(0.25, 0.25, 'bandpass', 1500); break;
+        case 'bonus':   this.tone(880, 1320, 0.12, 'triangle', 0.1); break;
+        case 'click':   this.tone(700, 950, 0.06, 'triangle', 0.06); break;
+        case 'newbird': [660, 880, 1100].forEach((f, i) => this.tone(f, 0, 0.14, 'triangle', 0.08, i * 0.09)); break;
+        case 'win':     [523, 659, 784, 1047].forEach((f, i) => this.tone(f, 0, 0.22, 'triangle', 0.12, i * 0.12)); break;
+        case 'lose':    [392, 330, 262].forEach((f, i) => this.tone(f, f * 0.95, 0.3, 'sawtooth', 0.05, i * 0.2)); break;
+      }
+    } catch (e) { /* เสียงเป็นของแถม ห้ามทำให้เกมพัง */ }
+  },
+};
+
+const FS = {
+  el() { return document.getElementById('app'); },
+  get available() { return !!(document.fullscreenEnabled || document.webkitFullscreenEnabled); },
+  active() { return !!(document.fullscreenElement || document.webkitFullscreenElement); },
+  toggle() {
+    try {
+      if (this.active()) {
+        const p = (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+        if (p && p.catch) p.catch(() => {});
+      } else {
+        const e = this.el(), req = e.requestFullscreen || e.webkitRequestFullscreen;
+        const p = req && req.call(e, { navigationUI: 'hide' });
+        if (p && p.then) p.then(() => { try { screen.orientation.lock('landscape').catch(() => {}); } catch (x) {} }).catch(() => {});
+      }
+    } catch (e) { /* เบราว์เซอร์ไม่รองรับ */ }
+  },
+};
+
+// ═══════════════════════════ 3) กราฟิก (วาดด้วยโค้ด) ═══════════════════════════
+function rng(seed) { let s = (Math.abs(Math.floor(seed)) % 2147483646) + 1; return () => (s = (s * 16807) % 2147483647) / 2147483647; }
+const fmt = (n) => Math.round(n).toLocaleString('en-US');
+
+function drawMountains(ctx, W, H) {
+  const back = (x) => H - (100 + 52 * Math.sin(TAU * x / W * 2 + 0.6) + 30 * Math.sin(TAU * x / W * 5 + 1.9) + 13 * Math.sin(TAU * x / W * 13 + 0.3) + 7 * Math.abs(Math.sin(TAU * x / W * 23)));
+  const front = (x) => H - (58 + 36 * Math.sin(TAU * x / W * 3 + 2.4) + 18 * Math.sin(TAU * x / W * 7 + 0.9) + 9 * Math.abs(Math.sin(TAU * x / W * 17)));
+  const shape = (fn) => { ctx.beginPath(); ctx.moveTo(0, H); for (let x = 0; x <= W; x += 4) ctx.lineTo(x, fn(x)); ctx.lineTo(W, H); ctx.closePath(); };
+  let g = ctx.createLinearGradient(0, H - 210, 0, H);
+  g.addColorStop(0, '#93bfe0'); g.addColorStop(1, '#bfe0f4');
+  shape(back); ctx.fillStyle = g; ctx.fill();
+  ctx.save(); shape(back); ctx.clip();                                    // หิมะบนยอดเขา
+  ctx.beginPath(); ctx.moveTo(0, 0);
+  for (let x = 0; x <= W; x += 8) ctx.lineTo(x, H - 150 + 7 * Math.sin(TAU * x / W * 19) + 4 * Math.sin(TAU * x / W * 41));
+  ctx.lineTo(W, 0); ctx.closePath();
+  ctx.fillStyle = 'rgba(250,253,255,.92)'; ctx.fill();
+  ctx.restore();
+  g = ctx.createLinearGradient(0, H - 120, 0, H);
+  g.addColorStop(0, '#79acd4'); g.addColorStop(1, '#a8d0ea');
+  shape(front); ctx.fillStyle = g; ctx.fill();
+  ctx.fillStyle = 'rgba(214,238,252,.35)'; ctx.fillRect(0, H - 30, W, 30);  // หมอกเชิงเขา
+}
+
+function drawHills(ctx, W, H) {
+  const back = (x) => H - (112 + 32 * Math.sin(TAU * x / W * 2 + 1.1) + 16 * Math.sin(TAU * x / W * 5 + 0.2));
+  const front = (x) => H - (62 + 20 * Math.sin(TAU * x / W * 3 + 2.0) + 11 * Math.sin(TAU * x / W * 7 + 1.3));
+  const shape = (fn) => { ctx.beginPath(); ctx.moveTo(0, H); for (let x = 0; x <= W; x += 4) ctx.lineTo(x, fn(x)); ctx.lineTo(W, H); ctx.closePath(); };
+  let g = ctx.createLinearGradient(0, H - 170, 0, H);
+  g.addColorStop(0, '#9fd58a'); g.addColorStop(1, '#7cc06a');
+  shape(back); ctx.fillStyle = g; ctx.fill();
+  const r = rng(11);
+  for (let i = 0; i < 46; i++) {                                           // ต้นไม้เล็กบนเนินไกล
+    const x = (i + r() * 0.6) * W / 46, y = back(x) + 6 + r() * 14, s = 5 + r() * 5;
+    for (const ox of [-W, 0, W]) {
+      ctx.fillStyle = '#5f9f4f'; ctx.beginPath(); ctx.arc(x + ox, y - s, s, 0, TAU); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.beginPath(); ctx.arc(x + ox - s * 0.3, y - s * 1.3, s * 0.45, 0, TAU); ctx.fill();
+    }
+  }
+  g = ctx.createLinearGradient(0, H - 100, 0, H);
+  g.addColorStop(0, '#79c667'); g.addColorStop(1, '#5eaa4f');
+  shape(front); ctx.fillStyle = g; ctx.fill();
+}
+
+function drawTrees(ctx, W, H) {
+  const r = rng(29);
+  const tree = (x, s, dark) => {
+    const base = H - 6;
+    ctx.fillStyle = '#6b4424'; ctx.fillRect(x - s * 0.12, base - s * 1.3, s * 0.24, s * 1.3);
+    const blobs = [[0, -1.75, 0.8], [-0.55, -1.35, 0.6], [0.55, -1.35, 0.62], [-0.25, -2.25, 0.55], [0.3, -2.15, 0.5]];
+    for (const [bx, by, br] of blobs) { ctx.fillStyle = dark ? '#3e8a38' : '#4b9c41'; ctx.beginPath(); ctx.arc(x + bx * s, base + by * s, br * s, 0, TAU); ctx.fill(); }
+    for (const [bx, by, br] of blobs.slice(0, 3)) { ctx.fillStyle = 'rgba(160,230,120,.28)'; ctx.beginPath(); ctx.arc(x + bx * s - br * s * 0.3, base + by * s - br * s * 0.35, br * s * 0.45, 0, TAU); ctx.fill(); }
+  };
+  const items = [];
+  for (let x = 30; x < W; x += 120 + r() * 140) items.push([x, 38 + r() * 34, r() > 0.5]);
+  for (const [x, s, d] of items) for (const ox of [-W, 0, W]) tree(x + ox, s, d);
+  ctx.fillStyle = '#4f9d43';                                              // พุ่มไม้แนวล่าง
+  for (let x = 0; x < W; x += 34) for (const ox of [-W, 0, W]) { ctx.beginPath(); ctx.arc(x + ox, H - 2, 16 + 8 * Math.abs(Math.sin(x * 0.37)), Math.PI, 0); ctx.fill(); }
+  // หมอกบางๆ (atmospheric perspective) → ฉากหลังจางลง ป้อม/หมูด้านหน้าเด่นขึ้น
+  ctx.globalCompositeOperation = 'source-atop';
+  const haze = ctx.createLinearGradient(0, 0, 0, H);
+  haze.addColorStop(0, 'rgba(215,240,255,.34)'); haze.addColorStop(1, 'rgba(215,240,255,.12)');
+  ctx.fillStyle = haze; ctx.fillRect(0, 0, W, H);
+  ctx.globalCompositeOperation = 'source-over';
+}
+
+function drawGround(ctx, W, H) {
+  const GL = 14;                                                          // เส้นพื้นจริงอยู่ที่ y=14 ของ texture
+  const r = rng(5);
+  let g = ctx.createLinearGradient(0, GL + 12, 0, H);
+  g.addColorStop(0, '#a4713f'); g.addColorStop(1, '#5e3b1d');
+  ctx.fillStyle = g; ctx.fillRect(0, GL + 10, W, H - GL - 10);
+  ctx.strokeStyle = 'rgba(70,40,15,.28)'; ctx.lineWidth = 2;              // ชั้นดิน
+  for (const y0 of [58, 84, 110]) { ctx.beginPath(); for (let x = 0; x <= W; x += 8) ctx.lineTo(x, y0 + 4 * Math.sin(TAU * x / W * 4 + y0)); ctx.stroke(); }
+  for (let i = 0; i < 70; i++) {                                           // ก้อนกรวด
+    const x = r() * (W - 20) + 10, y = GL + 30 + r() * (H - GL - 40), rx = 2 + r() * 5;
+    ctx.fillStyle = r() > 0.5 ? 'rgba(60,35,15,.35)' : 'rgba(215,180,130,.35)';
+    ctx.beginPath(); ctx.ellipse(x, y, rx, rx * 0.65, 0, 0, TAU); ctx.fill();
+  }
+  g = ctx.createLinearGradient(0, GL - 2, 0, GL + 22);                     // แถบหญ้า
+  g.addColorStop(0, '#7ad957'); g.addColorStop(1, '#3f9a33');
+  ctx.beginPath(); ctx.moveTo(0, GL);
+  for (let x = 0; x <= W; x += 8) ctx.lineTo(x, GL - 1 + 1.5 * Math.sin(TAU * x / W * 16));
+  for (let x = W; x >= 0; x -= 8) ctx.lineTo(x, GL + 18 + 4 * Math.sin(TAU * x / W * 11 + 1));
+  ctx.closePath(); ctx.fillStyle = g; ctx.fill();
+  for (let i = 0; i < W / 6; i++) {                                        // ใบหญ้าเหนือพื้น
+    const x = i * 6 + r() * 4, h = 4 + r() * 8;
+    ctx.fillStyle = r() > 0.5 ? '#5cbf45' : '#48a838';
+    for (const ox of [-W, 0, W]) { ctx.beginPath(); ctx.moveTo(x + ox - 2, GL + 2); ctx.lineTo(x + ox + 1, GL - h); ctx.lineTo(x + ox + 3, GL + 2); ctx.closePath(); ctx.fill(); }
+  }
+  for (let i = 0; i < 14; i++) {                                           // ดอกไม้
+    const x = 10 + r() * (W - 20), y = GL - 2 - r() * 4;
+    ctx.fillStyle = ['#fff6c2', '#ffd1e0', '#ffffff', '#ffe066'][i % 4];
+    for (let k = 0; k < 5; k++) { ctx.beginPath(); ctx.arc(x + Math.cos(k * TAU / 5) * 2.2, y + Math.sin(k * TAU / 5) * 2.2, 1.6, 0, TAU); ctx.fill(); }
+    ctx.fillStyle = '#f2a900'; ctx.beginPath(); ctx.arc(x, y, 1.3, 0, TAU); ctx.fill();
+  }
+}
+
+function drawCloud(ctx) {
+  const blobs = [[52, 58, 30], [92, 44, 40], [138, 54, 34], [168, 62, 22], [30, 66, 20], [110, 66, 28]];
+  ctx.fillStyle = 'rgba(190,215,238,.55)';
+  for (const [x, y, r] of blobs) { ctx.beginPath(); ctx.arc(x + 3, y + 6, r, 0, TAU); ctx.fill(); }
+  ctx.fillStyle = '#ffffff';
+  for (const [x, y, r] of blobs) { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill(); }
+  ctx.fillStyle = 'rgba(215,232,248,.9)'; ctx.fillRect(14, 72, 172, 10);
+}
+
+function eye(ctx, x, y, rw, rh, px, py, blink, lid, lidCol) {
+  if (blink) {
+    ctx.strokeStyle = '#1b1b1b'; ctx.lineWidth = Math.max(1.4, rw * 0.35); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x - rw, y); ctx.quadraticCurveTo(x, y + rh * 0.55, x + rw, y); ctx.stroke();
+    return;
+  }
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(x, y, rw, rh, 0, 0, TAU); ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(x + px, y + py, Math.min(rw, rh) * 0.5, 0, TAU); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x + px - rw * 0.2, y + py - rh * 0.28, Math.min(rw, rh) * 0.18, 0, TAU); ctx.fill();
+  if (lid) {                                                              // เปลือกตาเฉียง = สีหน้าเอาจริง
+    ctx.fillStyle = lidCol; ctx.beginPath();
+    ctx.moveTo(x - rw - 1, y - rh * 0.15); ctx.lineTo(x + rw + 1, y - rh * 0.55); ctx.lineTo(x + rw + 1, y - rh - 2); ctx.lineTo(x - rw - 1, y - rh - 2);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#123'; ctx.lineWidth = 1.4; ctx.beginPath(); ctx.moveTo(x - rw - 1, y - rh * 0.15); ctx.lineTo(x + rw + 1, y - rh * 0.55); ctx.stroke();
+  }
+}
+
+/** นก 4 ชนิด (ออกแบบเอง) หันหน้าไปทางขวา = มุม 0 */
+function drawBird(ctx, S, type, blink) {
+  const c = S / 2, T = BIRD_TYPES[type], r = T.r;
+  const poly = (pts, fill, stroke, lw = 1.4) => {
+    ctx.beginPath(); pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath();
+    ctx.fillStyle = fill; ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw; ctx.stroke(); }
+  };
+  const body = (c1, c2, outline) => {
+    const g = ctx.createRadialGradient(c - r * 0.35, c - r * 0.42, r * 0.1, c, c, r);
+    g.addColorStop(0, c1); g.addColorStop(1, c2);
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(c, c, r, 0, TAU); ctx.fill();
+    return () => { ctx.lineWidth = 2; ctx.strokeStyle = outline; ctx.beginPath(); ctx.arc(c, c, r, 0, TAU); ctx.stroke(); };
+  };
+  const clip = (fn) => { ctx.save(); ctx.beginPath(); ctx.arc(c, c, r, 0, TAU); ctx.clip(); fn(); ctx.restore(); };
+  const gloss = () => { ctx.fillStyle = 'rgba(255,255,255,.22)'; ctx.beginPath(); ctx.ellipse(c - r * 0.35, c - r * 0.5, r * 0.4, r * 0.22, -0.5, 0, TAU); ctx.fill(); };
+
+  if (type === 'pilot') {
+    poly([[c - 14, c - 3], [c - 27, c - 11], [c - 23, c + 2]], '#e0a526', '#8a5a0c');
+    poly([[c - 14, c + 4], [c - 27, c + 6], [c - 21, c + 12]], '#e0a526', '#8a5a0c');
+    poly([[c - 5, c - 16], [c + 1, c - 27], [c + 5, c - 16]], '#e0a526', '#8a5a0c');
+    poly([[c + 2, c - 17], [c + 11, c - 25], [c + 9, c - 14]], '#e0a526', '#8a5a0c');
+    const outline = body('#5b9cf0', '#173a80', '#0f2a5c');
+    clip(() => {
+      ctx.fillStyle = '#ffe6a8'; ctx.beginPath(); ctx.ellipse(c + 3, c + 11, 13, 8, -0.2, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#6b3e1f'; ctx.fillRect(c - r, c - 8, r * 2, 6);
+    });
+    gloss(); outline();
+    for (const ex of [c + 3, c + 13]) {
+      ctx.fillStyle = '#e0a526'; ctx.beginPath(); ctx.arc(ex, c - 5, 6.5, 0, TAU); ctx.fill();
+      ctx.fillStyle = '#d8f3ff'; ctx.beginPath(); ctx.arc(ex, c - 5, 4.8, 0, TAU); ctx.fill();
+      if (blink) { ctx.strokeStyle = '#123'; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.moveTo(ex - 3.5, c - 5); ctx.lineTo(ex + 3.5, c - 5); ctx.stroke(); }
+      else {
+        ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(ex + 1.5, c - 4.5, 2.2, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ex - 1.5, c - 7, 1.3, 0, TAU); ctx.fill();
+      }
+    }
+    poly([[c + 15, c + 1], [c + 26, c + 4], [c + 15, c + 8]], '#ff8c1a', '#a64d00', 1.2);
+  } else if (type === 'dash') {
+    poly([[c - 4, c - r + 3], [c - 19, c - r - 7], [c - 9, c - r + 8]], '#0b7f7a');
+    poly([[c + 2, c - r + 2], [c - 11, c - r - 9], [c - 2, c - r + 8]], '#0f928c');
+    poly([[c + 7, c - r + 4], [c - 3, c - r - 6], [c + 4, c - r + 9]], '#12a39c');
+    poly([[c - r + 3, c - 2], [c - r - 9, c - 8], [c - r - 7, c + 1]], '#0b7f7a');
+    poly([[c - r + 3, c + 3], [c - r - 9, c + 5], [c - r - 4, c + 9]], '#e6fffb', '#0b7f7a', 1);
+    const outline = body('#63f2e0', '#0a7d78', '#075754');
+    clip(() => {
+      ctx.fillStyle = '#e6fffb'; ctx.beginPath(); ctx.ellipse(c + 5, c + 10, 12, 7.5, -0.25, 0, TAU); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
+      for (const [dy, len] of [[-2, 0.55], [4, 0.45], [10, 0.35]]) { ctx.beginPath(); ctx.arc(c + 2, c + dy, 12, Math.PI * (1 - len * 0.5), Math.PI * (1 + len * 0.2)); ctx.stroke(); }
+    });
+    gloss(); outline();
+    eye(ctx, c + 4, c - 4, 4.4, 5, 1.6, 0.6, blink, true, '#14a39b');
+    eye(ctx, c + 12, c - 3, 4, 4.6, 1.4, 0.6, blink, true, '#14a39b');
+    poly([[c + r - 3, c - 1], [c + r + 9, c + 2], [c + r - 3, c + 6]], '#ffd23f', '#a67c00', 1.2);
+  } else if (type === 'triple') {
+    ctx.fillStyle = '#6a3fc2';
+    for (const [dx, dy] of [[-5, -2], [0, -4], [5, -2]]) { ctx.beginPath(); ctx.arc(c + dx, c - r + dy, 3.2, 0, TAU); ctx.fill(); }
+    const outline = body('#d5b8ff', '#6b3fc4', '#4a2690');
+    clip(() => { ctx.fillStyle = '#f5ecff'; ctx.beginPath(); ctx.ellipse(c + 3, c + 8, 9, 6, -0.2, 0, TAU); ctx.fill(); });
+    gloss(); outline();
+    eye(ctx, c + 2, c - 3, 4.2, 4.8, 1.3, 0.8, blink, false);
+    eye(ctx, c + 9.5, c - 3, 3.8, 4.4, 1.2, 0.8, blink, false);
+    ctx.fillStyle = 'rgba(255,120,170,.5)'; ctx.beginPath(); ctx.arc(c - 4, c + 3, 2.5, 0, TAU); ctx.fill();
+    poly([[c + r - 2, c + 1], [c + r + 6, c + 3.5], [c + r - 2, c + 6]], '#ff9f1c', '#a65b00', 1);
+  } else if (type === 'boom') {
+    const flame = (x, yb, h, w, col) => {
+      ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(x - w / 2, yb);
+      ctx.quadraticCurveTo(x - w / 2 - 2, yb - h * 0.55, x - 2, yb - h);
+      ctx.quadraticCurveTo(x + 1, yb - h * 0.55, x + 4, yb - h * 0.78);
+      ctx.quadraticCurveTo(x + w / 2 + 3, yb - h * 0.35, x + w / 2, yb); ctx.closePath(); ctx.fill();
+    };
+    flame(c - 1, c - r + 6, 18, 18, '#ff7a1a');
+    flame(c - 1, c - r + 6, 12, 10, '#ffe066');
+    poly([[c - r + 2, c + 2], [c - r - 8, c - 3], [c - r - 6, c + 6]], '#c7361a');
+    const outline = body('#ffb36b', '#c7361a', '#8a220c');
+    clip(() => {
+      ctx.fillStyle = '#ffd23f'; ctx.fillRect(c - r, c + 1, r * 2, 4); ctx.fillRect(c - r, c + 9, r * 2, 2.5);
+      ctx.fillStyle = '#ffe3c2'; ctx.beginPath(); ctx.ellipse(c + 5, c + 15, 11, 6, -0.2, 0, TAU); ctx.fill();
+    });
+    gloss(); outline();
+    eye(ctx, c + 5, c - 7, 4.6, 5.2, 1.5, 0.3, blink, false);
+    eye(ctx, c + 13.5, c - 6, 4.1, 4.8, 1.4, 0.3, blink, false);
+    poly([[c + r - 3, c - 2], [c + r + 6, c + 1], [c + r - 3, c + 4]], '#ffcc33', '#8a5a00', 1.2);
+  }
+}
+
+/** หมูโจรสีเขียว: base / blink / hurt  ·  helmet = หมวกนิรภัย, boss = ผ้าโพกแดง */
+function drawPig(ctx, cx, cy, r, T, variant) {
+  const dark = '#2f6b19', hurt = variant === 'hurt', blink = variant === 'blink';
+  ctx.lineWidth = 2; ctx.strokeStyle = dark; ctx.fillStyle = '#5fae35';
+  if (!T.helmet) {
+    for (const s of [-1, 1]) {
+      ctx.beginPath(); ctx.moveTo(cx + s * r * 0.22, cy - r * 0.92); ctx.lineTo(cx + s * r * 0.6, cy - r - 7); ctx.lineTo(cx + s * r * 0.82, cy - r * 0.55);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+  }
+  const g = ctx.createRadialGradient(cx - r * 0.35, cy - r * 0.4, r * 0.1, cx, cy, r);
+  g.addColorStop(0, '#b8f282'); g.addColorStop(0.6, '#7ccd4a'); g.addColorStop(1, '#4b9a29');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.fill();
+  ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.clip();
+  if (T.bandana) {
+    ctx.fillStyle = '#d62839'; ctx.fillRect(cx - r, cy - r, r * 2, r * 0.52);
+    ctx.fillStyle = 'rgba(255,255,255,.85)';
+    for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.arc(cx + i * r * 0.36, cy - r * 0.68 + (i % 2) * 4, 2, 0, TAU); ctx.fill(); }
+  }
+  ctx.fillStyle = '#1f2a37'; ctx.beginPath(); ctx.ellipse(cx, cy - r * 0.2, r * 1.1, r * 0.25, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.beginPath(); ctx.ellipse(cx - r * 0.38, cy - r * 0.58, r * 0.34, r * 0.16, -0.4, 0, TAU); ctx.fill();
+  ctx.restore();
+  ctx.lineWidth = 2.2; ctx.strokeStyle = dark; ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.stroke();
+  ctx.fillStyle = '#1f2a37';
+  ctx.beginPath(); ctx.moveTo(cx - r * 0.95, cy - r * 0.22); ctx.lineTo(cx - r - 7, cy - r * 0.5); ctx.lineTo(cx - r - 5, cy); ctx.closePath(); ctx.fill();
+  if (T.bandana) {
+    ctx.fillStyle = '#b81f2f';
+    ctx.beginPath(); ctx.moveTo(cx + r * 0.8, cy - r * 0.6); ctx.lineTo(cx + r + 7, cy - r * 0.85); ctx.lineTo(cx + r + 6, cy - r * 0.3); ctx.closePath(); ctx.fill();
+  }
+  if (T.helmet) {                                                         // หมวกนิรภัยสีเหลือง
+    ctx.fillStyle = '#ffc83d'; ctx.strokeStyle = '#a87a00'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(cx, cy - r * 0.4, r * 0.95, Math.PI, TAU); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#ffe07a'; ctx.fillRect(cx - r * 0.12, cy - r * 1.3, r * 0.24, r * 0.88);
+    ctx.fillStyle = '#ffc83d'; ctx.fillRect(cx - r * 1.14, cy - r * 0.52, r * 2.28, r * 0.16); ctx.strokeRect(cx - r * 1.14, cy - r * 0.52, r * 2.28, r * 0.16);
+    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.ellipse(cx - r * 0.45, cy - r * 0.95, r * 0.22, r * 0.1, -0.5, 0, TAU); ctx.fill();
+  }
+  for (const s of [-1, 1]) {
+    const ex = cx + s * r * 0.36, ey = cy - r * 0.2;
+    if (hurt && s === 1) {
+      ctx.fillStyle = 'rgba(110,50,140,.55)'; ctx.beginPath(); ctx.arc(ex, ey, r * 0.27, 0, TAU); ctx.fill();
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(ex - r * 0.14, ey); ctx.lineTo(ex + r * 0.14, ey); ctx.stroke();
+      continue;
+    }
+    if (blink) {
+      ctx.strokeStyle = '#d9f2c4'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(ex - r * 0.15, ey); ctx.quadraticCurveTo(ex, ey + r * 0.1, ex + r * 0.15, ey); ctx.stroke();
+      continue;
+    }
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ex, ey, r * 0.17, 0, TAU); ctx.fill();
+    ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(ex - r * 0.06, ey + 1, r * 0.085, 0, TAU); ctx.fill();
+  }
+  ctx.fillStyle = 'rgba(255,120,150,.45)';
+  for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(cx + s * r * 0.63, cy + r * 0.22, r * 0.13, 0, TAU); ctx.fill(); }
+  ctx.fillStyle = '#c3f09a'; ctx.strokeStyle = '#3f8a22'; ctx.lineWidth = 1.8;
+  ctx.beginPath(); ctx.ellipse(cx, cy + r * 0.24, r * 0.34, r * 0.25, 0, 0, TAU); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = dark;
+  for (const s of [-1, 1]) { ctx.beginPath(); ctx.ellipse(cx + s * r * 0.12, cy + r * 0.24, r * 0.06, r * 0.1, 0, 0, TAU); ctx.fill(); }
+  ctx.strokeStyle = dark; ctx.lineWidth = 1.8;
+  ctx.beginPath(); ctx.moveTo(cx - r * 0.2, cy + r * 0.62); ctx.quadraticCurveTo(cx + r * 0.05, cy + r * 0.72, cx + r * 0.28, cy + r * 0.56); ctx.stroke();
+  if (hurt) {
+    ctx.save(); ctx.translate(cx - r * 0.3, cy - r * (T.helmet ? 0.05 : 0.6)); ctx.rotate(-0.5);
+    ctx.fillStyle = '#f2c894'; ctx.strokeStyle = '#c79a5e'; ctx.lineWidth = 1;
+    ctx.fillRect(-r * 0.32, -r * 0.09, r * 0.64, r * 0.18); ctx.strokeRect(-r * 0.32, -r * 0.09, r * 0.64, r * 0.18);
+    ctx.restore();
+  }
+}
+
+function shapePath(ctx, shape, w, h, inset = 1) {
+  ctx.beginPath();
+  if (shape === 'tri') { ctx.moveTo(inset * 1.5, h - inset); ctx.lineTo(w / 2, inset * 1.8); ctx.lineTo(w - inset * 1.5, h - inset); ctx.closePath(); }
+  else if (shape === 'ball') ctx.arc(w / 2, h / 2, Math.min(w, h) / 2 - inset, 0, TAU);
+  else ctx.rect(inset, inset, w - inset * 2, h - inset * 2);
+}
+const BORDER = { wood: '#6e3f17', glass: 'rgba(70,150,205,0.95)', stone: '#5c646b', metal: '#3e4a56', tnt: '#4a120d' };
+
+function drawBlock(ctx, mat, w, h, shape, cracked, seed) {
+  const r = rng(seed);
+  const horiz = w >= h, L = horiz ? w : h, S = horiz ? h : w;
+  const path = (pts) => { ctx.beginPath(); pts.forEach(([a, b], i) => (horiz ? (i ? ctx.lineTo(a, b) : ctx.moveTo(a, b)) : (i ? ctx.lineTo(b, a) : ctx.moveTo(b, a)))); ctx.stroke(); };
+  ctx.save(); shapePath(ctx, shape, w, h, 1); ctx.clip();
+  if (mat === 'wood') {
+    if (shape === 'ball') {
+      ctx.fillStyle = '#d39a5c'; ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = 'rgba(120,65,25,.55)'; ctx.lineWidth = 1.3;
+      for (let rr = 4; rr < w / 2 - 3; rr += 4) { ctx.beginPath(); ctx.ellipse(w / 2, h / 2, rr, rr * 0.95, 0, 0, TAU); ctx.stroke(); }
+    } else {
+      ctx.fillStyle = '#c98a4b'; ctx.fillRect(0, 0, w, h);
+      const gr = horiz ? ctx.createLinearGradient(0, 0, 0, h) : ctx.createLinearGradient(0, 0, w, 0);
+      gr.addColorStop(0, 'rgba(255,225,170,.45)'); gr.addColorStop(0.5, 'rgba(255,255,255,0)'); gr.addColorStop(1, 'rgba(90,45,10,.32)');
+      ctx.fillStyle = gr; ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = 'rgba(115,62,22,.45)'; ctx.lineWidth = 1;
+      for (let s = 4; s < S - 2; s += 5) { const pts = [], ph = r() * 6; for (let t = 0; t <= L; t += 6) pts.push([t, s + Math.sin(t * 0.08 + ph) * 1.1]); path(pts); }
+      if (L > 60) {
+        const kx = L * (0.25 + r() * 0.5), ky = S / 2;
+        ctx.strokeStyle = 'rgba(100,52,18,.6)'; ctx.lineWidth = 1.4; ctx.beginPath();
+        horiz ? ctx.ellipse(kx, ky, 5, Math.min(3, S / 4), 0, 0, TAU) : ctx.ellipse(ky, kx, Math.min(3, S / 4), 5, 0, 0, TAU);
+        ctx.stroke();
+      }
+    }
+  } else if (mat === 'glass') {
+    const gr = ctx.createLinearGradient(0, 0, w, h);
+    gr.addColorStop(0, 'rgba(215,245,255,.75)'); gr.addColorStop(0.5, 'rgba(165,222,250,.5)'); gr.addColorStop(1, 'rgba(120,195,240,.62)');
+    ctx.fillStyle = gr; ctx.fillRect(0, 0, w, h);
+    if (w > 12 && h > 12) { ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,255,255,0.75)'; shapePath(ctx, shape, w, h, 4); ctx.stroke(); }
+    ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.lineWidth = 2.5;
+    for (const t of [0.22, 0.6]) path([[L * t, S - 3], [L * t + S * 0.6, 3]]);
+  } else if (mat === 'stone') {
+    ctx.fillStyle = '#a3abb3'; ctx.fillRect(0, 0, w, h);
+    for (let i = 0; i < (w * h) / 35; i++) { ctx.fillStyle = r() > 0.5 ? 'rgba(60,65,70,.35)' : 'rgba(255,255,255,.3)'; ctx.fillRect(r() * w, r() * h, 1 + r() * 2, 1 + r() * 2); }
+    if (shape === 'rect') {
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.moveTo(2, h - 2); ctx.lineTo(2, 2); ctx.lineTo(w - 2, 2); ctx.stroke();
+      ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.moveTo(w - 2, 2); ctx.lineTo(w - 2, h - 2); ctx.lineTo(2, h - 2); ctx.stroke();
+    }
+  } else if (mat === 'metal') {
+    const gr = horiz ? ctx.createLinearGradient(0, 0, 0, h) : ctx.createLinearGradient(0, 0, w, 0);
+    gr.addColorStop(0, '#e3eaf0'); gr.addColorStop(0.45, '#a9b7c4'); gr.addColorStop(1, '#697a8a');
+    ctx.fillStyle = gr; ctx.fillRect(0, 0, w, h);
+    ctx.lineWidth = 1;
+    for (let s = 2; s < S; s += 3) { ctx.strokeStyle = `rgba(255,255,255,${0.05 + r() * 0.12})`; path([[0, s], [L, s]]); }
+    ctx.fillStyle = 'rgba(255,255,255,.22)'; ctx.beginPath(); ctx.moveTo(w * 0.15, 0); ctx.lineTo(w * 0.35, 0); ctx.lineTo(w * 0.15, h); ctx.lineTo(0, h); ctx.closePath(); ctx.fill();
+    if (shape === 'rect' && Math.min(w, h) >= 16) {
+      for (const [x, y] of [[5, 5], [w - 5, 5], [5, h - 5], [w - 5, h - 5]]) {
+        ctx.fillStyle = '#56626e'; ctx.beginPath(); ctx.arc(x, y, 2.4, 0, TAU); ctx.fill();
+        ctx.fillStyle = '#eef3f7'; ctx.beginPath(); ctx.arc(x - 0.7, y - 0.7, 0.9, 0, TAU); ctx.fill();
+      }
+    }
+  } else if (mat === 'tnt') {
+    ctx.fillStyle = '#c8342b'; ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = 'rgba(80,10,5,.45)'; ctx.lineWidth = 1;
+    for (let x = w / 4; x < w; x += w / 4) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+    ctx.strokeStyle = '#5a1510'; ctx.lineWidth = 4; ctx.strokeRect(2, 2, w - 4, h - 4);
+    const lw = w * 0.8, lh = h * 0.38;
+    ctx.fillStyle = '#ffd23f'; ctx.fillRect(w / 2 - lw / 2, h / 2 - lh / 2, lw, lh);
+    ctx.strokeStyle = '#5a1510'; ctx.lineWidth = 1.5; ctx.strokeRect(w / 2 - lw / 2, h / 2 - lh / 2, lw, lh);
+    ctx.fillStyle = '#3a0d08'; ctx.font = `800 ${Math.round(lh * 0.8)}px Kanit, Tahoma, sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('TNT', w / 2, h / 2 + 1);
+  } else if (mat === 'rock') {
+    ctx.fillStyle = '#8d7d69'; ctx.fillRect(0, 0, w, h);
+    for (let i = 0; i < (w * h) / 700; i++) {
+      ctx.fillStyle = r() > 0.5 ? 'rgba(60,48,36,.25)' : 'rgba(200,185,160,.2)';
+      ctx.beginPath(); ctx.ellipse(r() * w, 10 + r() * h, 6 + r() * 18, 4 + r() * 10, r() * 3, 0, TAU); ctx.fill();
+    }
+    ctx.strokeStyle = 'rgba(50,38,28,.45)'; ctx.lineWidth = 1.6;
+    for (let i = 0; i < w / 60; i++) { let x = r() * w, y = 14 + r() * (h - 20); ctx.beginPath(); ctx.moveTo(x, y); for (let k = 0; k < 4; k++) { x += (r() - 0.5) * 30; y += 6 + r() * 10; ctx.lineTo(x, y); } ctx.stroke(); }
+    const sh = ctx.createLinearGradient(0, 0, 0, h); sh.addColorStop(0, 'rgba(0,0,0,0)'); sh.addColorStop(1, 'rgba(0,0,0,.3)');
+    ctx.fillStyle = sh; ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = '#5dbb4a'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(w, 0);
+    for (let x = w; x >= 0; x -= 10) ctx.lineTo(x, 9 + 4 * Math.sin(x * 0.21) + 2 * Math.sin(x * 0.57));
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#3f9a33'; ctx.fillRect(0, 0, w, 3);
+  }
+  if (shape === 'ball') {
+    const sg = ctx.createRadialGradient(w * 0.35, h * 0.32, 1, w / 2, h / 2, w / 2);
+    sg.addColorStop(0, 'rgba(255,255,255,.35)'); sg.addColorStop(0.6, 'rgba(255,255,255,0)'); sg.addColorStop(1, 'rgba(0,0,0,.35)');
+    ctx.fillStyle = sg; ctx.fillRect(0, 0, w, h);
+  }
+  if (cracked) {
+    const rr = rng(seed + 999);
+    ctx.strokeStyle = mat === 'glass' ? 'rgba(255,255,255,.95)' : mat === 'wood' ? '#3b220d' : mat === 'metal' ? '#2f3a44' : '#33383d';
+    ctx.lineWidth = 1.8; ctx.lineJoin = 'round';
+    const n = Math.max(2, Math.round((w + h) / 55));
+    for (let i = 0; i < n; i++) {
+      let x = rr() * w, y = rr() * h;
+      const side = Math.floor(rr() * 4);
+      if (side === 0) y = 0; else if (side === 1) y = h; else if (side === 2) x = 0; else x = w;
+      let dx = w / 2 - x, dy = h / 2 - y; const dl = Math.hypot(dx, dy) || 1; dx /= dl; dy /= dl;
+      ctx.beginPath(); ctx.moveTo(x, y);
+      const seg = Math.max(5, Math.min(w, h) * 0.35);
+      for (let k = 0; k < 5; k++) {
+        x = Math.max(1, Math.min(w - 1, x + dx * seg + (rr() - 0.5) * seg));
+        y = Math.max(1, Math.min(h - 1, y + dy * seg + (rr() - 0.5) * seg));
+        ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+  if (BORDER[mat]) { shapePath(ctx, shape, w, h, 1); ctx.lineWidth = 2; ctx.strokeStyle = BORDER[mat]; ctx.stroke(); }
+}
+
+function drawSling(ctx, front) {
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  const wood = (lw, col) => { ctx.lineWidth = lw; ctx.strokeStyle = col; ctx.stroke(); };
+  ctx.beginPath();
+  if (!front) { ctx.moveTo(32, 133); ctx.lineTo(32, 80); ctx.quadraticCurveTo(46, 64, 47, 16); }
+  else        { ctx.moveTo(32, 84); ctx.quadraticCurveTo(18, 64, 17, 18); }
+  wood(15, '#4a2a12'); wood(10, front ? '#9a6632' : '#8a5a2b'); wood(3, front ? 'rgba(255,220,160,.35)' : 'rgba(255,220,160,.2)');
+  ctx.fillStyle = '#3b1d0b';
+  front ? ctx.fillRect(10, 24, 14, 6) : ctx.fillRect(40, 22, 14, 6);
+}
+
+const Tex = {
+  /** สร้าง CanvasTexture ขนาดจริง × TEX แล้ววาดด้วยพิกัดปกติ */
+  canvas(scene, key, w, h, draw) {
+    if (scene.textures.exists(key)) return key;
+    const t = scene.textures.createCanvas(key, Math.ceil(w * TEX), Math.ceil(h * TEX));
+    const ctx = t.getContext();
+    ctx.save(); ctx.scale(TEX, TEX); draw(ctx, w, h); ctx.restore();
+    t.refresh();
+    return key;
+  },
+  radial(scene, key, size, stops) {
+    return this.canvas(scene, key, size, size, (c) => {
+      const g = c.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+      stops.forEach(([o, col]) => g.addColorStop(o, col));
+      c.fillStyle = g; c.fillRect(0, 0, size, size);
+    });
+  },
+  ensureAll(scene) {
+    if (scene.textures.exists('ground')) return;
+    this.canvas(scene, 'bg_mountains', 1024, 256, drawMountains);
+    this.canvas(scene, 'bg_hills', 1024, 220, drawHills);
+    this.canvas(scene, 'bg_trees', 1024, 200, drawTrees);
+    this.canvas(scene, 'ground', 512, 140, drawGround);
+    this.canvas(scene, 'cloud', 200, 90, drawCloud);
+    this.canvas(scene, 'sling_back', 64, 136, (c) => drawSling(c, false));
+    this.canvas(scene, 'sling_front', 64, 136, (c) => drawSling(c, true));
+    for (const t of Object.keys(BIRD_TYPES)) {
+      const S = BIRD_TYPES[t].tex;
+      this.canvas(scene, `bird_${t}`, S, S, (c) => drawBird(c, S, t, false));
+      this.canvas(scene, `bird_${t}_blink`, S, S, (c) => drawBird(c, S, t, true));
+    }
+    for (const t of Object.keys(PIG_TYPES)) for (const v of ['base', 'blink', 'hurt']) this.pig(scene, t, v);
+    const chip = (key, w, h, fill, stroke) => this.canvas(scene, key, w, h, (c) => { c.fillStyle = fill; c.fillRect(0, 0, w, h); c.strokeStyle = stroke; c.lineWidth = 1; c.strokeRect(0.5, 0.5, w - 1, h - 1); });
+    chip('chip_wood', 12, 6, '#c98a4b', '#6e3f17');
+    chip('chip_stone', 9, 8, '#a3abb3', '#5c646b');
+    chip('chip_metal', 10, 5, '#c3ced8', '#56626e');
+    chip('chip_tnt', 10, 7, '#c8342b', '#5a1510');
+    this.canvas(scene, 'chip_glass', 10, 10, (c) => { c.fillStyle = 'rgba(210,244,255,.95)'; c.strokeStyle = '#6fb8e0'; c.beginPath(); c.moveTo(0, 10); c.lineTo(5, 0); c.lineTo(10, 10); c.closePath(); c.fill(); c.stroke(); });
+    this.radial(scene, 'puff', 28, [[0, 'rgba(255,255,255,1)'], [1, 'rgba(255,255,255,0)']]);
+    this.radial(scene, 'puff_green', 28, [[0, 'rgba(195,248,145,1)'], [1, 'rgba(120,205,74,0)']]);
+    this.radial(scene, 'smoke', 48, [[0, 'rgba(120,120,125,.85)'], [0.6, 'rgba(110,110,115,.45)'], [1, 'rgba(100,100,105,0)']]);
+    this.radial(scene, 'fire', 40, [[0, 'rgba(255,250,200,1)'], [0.35, 'rgba(255,180,60,.95)'], [1, 'rgba(255,90,20,0)']]);
+    this.radial(scene, 'dust', 32, [[0, 'rgba(214,190,150,.9)'], [1, 'rgba(214,190,150,0)']]);
+    this.radial(scene, 'flash', 128, [[0, 'rgba(255,255,240,1)'], [0.4, 'rgba(255,230,150,.8)'], [1, 'rgba(255,200,80,0)']]);
+    this.radial(scene, 'spark', 10, [[0, 'rgba(255,255,220,1)'], [0.5, 'rgba(255,214,107,1)'], [1, 'rgba(255,170,0,0)']]);
+    this.radial(scene, 'pollen', 8, [[0, 'rgba(255,255,230,1)'], [1, 'rgba(255,255,230,0)']]);
+    this.canvas(scene, 'feather', 14, 7, (c) => { c.fillStyle = '#ffffff'; c.beginPath(); c.ellipse(7, 3.5, 7, 3, 0, 0, TAU); c.fill(); });
+    this.canvas(scene, 'streak', 34, 4, (c) => { const g = c.createLinearGradient(0, 0, 34, 0); g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(255,255,255,.95)'); c.fillStyle = g; c.fillRect(0, 0, 34, 4); });
+  },
+  block(scene, mat, w, h, shape, cracked) {
+    const key = `blk_${mat}_${shape}_${w}x${h}${cracked ? '_cr' : ''}`;
+    return this.canvas(scene, key, w, h, (c) => drawBlock(c, mat, w, h, shape, cracked, w * 31 + h * 17 + mat.length * 101));
+  },
+  pig(scene, type, variant) {
+    const T = PIG_TYPES[type], S = T.r * 2 + 18;
+    return this.canvas(scene, `pig_${type}_${variant}`, S, S, (c) => drawPig(c, S / 2, S / 2, T.r, T, variant));
+  },
+};
+
+// ───── ตัวช่วย UI / วาดเวกเตอร์ ─────
+const img = (scene, x, y, key) => scene.add.image(x, y, key).setScale(1 / TEX);
+function txt(scene, x, y, str, size, color, o = {}) {
+  const t = scene.add.text(x, y, str, {
+    fontFamily: FONT, fontSize: size + 'px', color, fontStyle: String(o.weight || 400),
+    stroke: o.stroke || '#000000', strokeThickness: o.st || 0, align: o.align || 'center',
+    padding: { top: 6, bottom: 4, left: 3, right: 3 }, resolution: o.res || UI_RES,
+  });
+  if (o.shadow) t.setShadow(0, 3, 'rgba(0,0,0,.35)', 4, true, true);
+  return t;
+}
+function glassPanel(g, x, y, w, h, r = 18, alpha = 0.62) {
+  r = Math.min(r, h / 2, w / 2);
+  g.fillStyle(0x000000, 0.2).fillRoundedRect(x + 2, y + 6, w, h, r);
+  g.fillStyle(NAVY, alpha).fillRoundedRect(x, y, w, h, r);
+  const hr = Math.min(r - 2, 14);
+  g.fillStyle(0xffffff, 0.1).fillRoundedRect(x + 4, y + 3, w - 8, Math.min(h * 0.42, 38), { tl: Math.max(hr, 1), tr: Math.max(hr, 1), bl: 6, br: 6 });
+  g.lineStyle(2, GOLD, 0.85).strokeRoundedRect(x, y, w, h, r);
+}
+function starPoints(cx, cy, R, r) {
+  const pts = [];
+  for (let k = 0; k < 10; k++) { const rad = k % 2 ? r : R, a = -Math.PI / 2 + (k * Math.PI) / 5; pts.push(new Phaser.Math.Vector2(cx + Math.cos(a) * rad, cy + Math.sin(a) * rad)); }
+  return pts;
+}
+function drawStar(g, cx, cy, R, on) {
+  const pts = starPoints(cx, cy, R, R * 0.45);
+  g.fillStyle(on ? 0xffd66b : 0x33466b, 1).fillPoints(pts, true);
+  g.lineStyle(Math.max(2, R * 0.1), on ? 0xb8860b : 0x1f2d49, 1).strokePoints(pts, true);
+  if (on) g.fillStyle(0xffffff, 0.35).fillPoints(starPoints(cx - R * 0.08, cy - R * 0.1, R * 0.45, R * 0.2), true);
+}
+function drawIcon(g, kind, on) {
+  g.clear();
+  g.fillStyle(0xffffff, 1); g.lineStyle(3.5, 0xffffff, 1);
+  if (kind === 'pause') { g.fillRoundedRect(-9, -11, 6, 22, 2); g.fillRoundedRect(3, -11, 6, 22, 2); }
+  else if (kind === 'restart') {
+    g.beginPath(); g.arc(0, 0, 10, Phaser.Math.DegToRad(-40), Phaser.Math.DegToRad(250), false); g.strokePath();
+    const a = Phaser.Math.DegToRad(-40), ex = Math.cos(a) * 10, ey = Math.sin(a) * 10;
+    g.fillTriangle(ex + 6, ey + 1, ex - 4, ey - 6, ex - 2, ey + 6);
+  } else if (kind === 'sound') {
+    g.fillPoints([{ x: -12, y: -4 }, { x: -6, y: -4 }, { x: 1, y: -10 }, { x: 1, y: 10 }, { x: -6, y: 4 }, { x: -12, y: 4 }], true);
+    if (on) { g.lineStyle(3, 0xffffff, 1); g.beginPath(); g.arc(2, 0, 6, -0.8, 0.8); g.strokePath(); g.beginPath(); g.arc(2, 0, 11, -0.8, 0.8); g.strokePath(); }
+    else { g.lineStyle(3, 0xff8a8a, 1); g.lineBetween(5, -6, 13, 6); g.lineBetween(13, -6, 5, 6); }
+  } else if (kind === 'fs') {
+    const s = 11, k = 6;
+    const corner = (x, y, dx, dy) => { g.lineBetween(x, y, x + dx * k, y); g.lineBetween(x, y, x, y + dy * k); };
+    if (!on) { corner(-s, -s, 1, 1); corner(s, -s, -1, 1); corner(-s, s, 1, -1); corner(s, s, -1, -1); }
+    else { corner(-4, -4, -1, -1); corner(4, -4, 1, -1); corner(-4, 4, -1, 1); corner(4, 4, 1, 1); }
+  } else if (kind === 'grid') {
+    for (const [x, y] of [[-10, -10], [2, -10], [-10, 2], [2, 2]]) g.fillRoundedRect(x, y, 8, 8, 2);
+  } else if (kind === 'close') { g.lineBetween(-8, -8, 8, 8); g.lineBetween(8, -8, -8, 8); }
+  else if (kind === 'home') { g.fillTriangle(-12, -1, 0, -12, 12, -1); g.fillRect(-8, -1, 16, 11); g.fillStyle(NAVY, 1).fillRect(-2.5, 3, 5, 7); }
+}
+function makeIconButton(scene, x, y, kind, onClick, on = true) {
+  const c = scene.add.container(x, y);
+  const bg = scene.add.graphics();
+  bg.fillStyle(0x000000, 0.22).fillCircle(1, 4, 27);
+  bg.fillStyle(NAVY, 0.66).fillCircle(0, 0, 27);
+  bg.fillStyle(0xffffff, 0.12).fillEllipse(0, -11, 36, 16);
+  bg.lineStyle(2, GOLD, 0.9).strokeCircle(0, 0, 27);
+  const ic = scene.add.graphics();
+  drawIcon(ic, kind, on);
+  const z = scene.add.zone(0, 0, 58, 58).setInteractive({ useHandCursor: true });
+  c.add([bg, ic, z]);
+  z.on('pointerover', () => c.setScale(1.08));
+  z.on('pointerout', () => c.setScale(1));
+  z.on('pointerdown', () => Sfx.unlock());
+  z.on('pointerup', () => { Sfx.play('click'); onClick(); });
+  c.redraw = (state) => drawIcon(ic, kind, state);
+  return c;
+}
+function makeButton(scene, x, y, label, onClick, o = {}) {
+  const w = o.w || 230, h = o.h || 66, color = o.color || 0x2b8a3e, r = h / 2.6;
+  const c = scene.add.container(x, y);
+  const g = scene.add.graphics();
+  g.fillStyle(0x000000, 0.25).fillRoundedRect(-w / 2 + 2, -h / 2 + 6, w, h, r);
+  g.fillStyle(color, 1).fillRoundedRect(-w / 2, -h / 2, w, h, r);
+  g.fillStyle(0xffffff, 0.16).fillRoundedRect(-w / 2 + 5, -h / 2 + 4, w - 10, h * 0.42, { tl: r - 3, tr: r - 3, bl: 8, br: 8 });
+  g.lineStyle(3, GOLD, 0.95).strokeRoundedRect(-w / 2, -h / 2, w, h, r);
+  const t = txt(scene, 0, 1, label, o.size || 26, '#ffffff', { weight: 800, shadow: true }).setOrigin(0.5);
+  const z = scene.add.zone(0, 0, w, h).setInteractive({ useHandCursor: true });
+  c.add([g, t, z]);
+  z.on('pointerover', () => c.setScale(1.05));
+  z.on('pointerout', () => c.setScale(1));
+  z.on('pointerdown', () => { Sfx.unlock(); c.setScale(0.97); });
+  z.on('pointerup', () => { c.setScale(1); Sfx.play('click'); onClick(); });
+  c.label = t;
+  return c;
+}
+
+/** ฉากหลัง parallax (ภูเขา → เนิน → ต้นไม้ → พื้น) + เมฆ + ละอองลอย */
+function buildBackdrop(scene, worldW) {
+  // วางภาพที่ต่อกันได้ไร้รอยเรียงเป็นแถบ (ไม่ใช้ TileSprite ขนาดยักษ์ ซึ่งเกินขนาด texture สูงสุดบนมือถือ)
+  const X0 = -3200, X1 = worldW + 3200;
+  const strip = (key, texW, y, originY, f, depth) => {
+    for (let x = X0; x < X1; x += texW - 1) scene.add.image(x, y, key).setOrigin(0, originY).setScale(1 / TEX).setScrollFactor(f, 1).setDepth(depth);
+  };
+  strip('bg_mountains', 1024, GROUND_Y - 36, 1, 0.12, -20);
+  strip('bg_hills', 1024, GROUND_Y - 2, 1, 0.3, -19);
+  strip('bg_trees', 1024, GROUND_Y + 4, 1, 0.55, -18);
+  strip('ground', 512, GROUND_Y - 14, 0, 1, 0);
+  const clouds = [];
+  const r = rng(worldW);
+  for (let i = 0; i < 9; i++) {
+    const c = scene.add.image(-1600 + r() * 4200, 20 + r() * 260, 'cloud').setScrollFactor(0.08, 1).setDepth(-21)
+      .setScale((0.55 + r() * 0.8) / TEX).setAlpha(0.72 + r() * 0.28);
+    c.speed = 5 + r() * 12;
+    clouds.push(c);
+  }
+  scene.add.particles(0, 0, 'pollen', {
+    x: { min: 0, max: worldW }, y: { min: 360, max: 630 }, lifespan: 7000, frequency: 380,
+    speedX: { min: -14, max: 14 }, speedY: { min: -12, max: -3 }, scale: { start: 0.9 / TEX, end: 0.3 / TEX },
+    alpha: { start: 0.75, end: 0 }, blendMode: 'ADD',
+  }).setDepth(6);
+  return {
+    update(dt) { for (const c of clouds) { c.x += c.speed * dt / 1000; if (c.x > 2700) c.x = -1700; } },
+  };
+}
+function cameraFit(scene) {
+  const w = scene.scale.width, h = scene.scale.height;
+  const zoom = Math.min(h / VIEW_H, w / (h > w ? 760 : MIN_VIEW_W));      // จอแนวตั้ง: ซูมใกล้ขึ้น ให้ของไม่เล็กเกิน
+  scene.cameras.main.setZoom(zoom);
+  return { zoom, viewW: w / zoom, viewH: h / zoom };
+}
+const uiScale = (w, h) => Phaser.Math.Clamp(Math.min(w / DPR / 1280, h / DPR / 720), 0.5, 1.3) * DPR;
+
+// ═══════════════════════════ 4) ฉาก ═══════════════════════════
+class BootScene extends Phaser.Scene {
+  constructor() { super('Boot'); }
+  create() {
+    Tex.ensureAll(this);
+    bootEl.remove();
+    const q = new URLSearchParams(location.search).get('level');          // ทางลัดทดสอบ: ?level=5
+    const lv = q ? Phaser.Math.Clamp(parseInt(q, 10) - 1 || 0, 0, LEVELS.length - 1) : -1;
+    if (lv >= 0) this.scene.start('Game', { level: lv }); else this.scene.start('Title');
+  }
+}
+
+class TitleScene extends Phaser.Scene {
+  constructor() { super('Title'); }
+  init(d) { this.openSelect = !!(d && d.select); this.ui = null; }
+  create() {
+    this.worldW = 1850;
+    this.bd = buildBackdrop(this, this.worldW);
+    img(this, SLING.x, GROUND_Y, 'sling_back').setOrigin(0.5, 1).setDepth(4);
+    img(this, SLING.x, GROUND_Y, 'sling_front').setOrigin(0.5, 1).setDepth(9);
+    this.add.graphics().setDepth(6).lineStyle(6, 0x3b1d0b).lineBetween(TIP_BACK.x, TIP_BACK.y, TIP_FRONT.x, TIP_FRONT.y);
+    Object.keys(BIRD_TYPES).forEach((t, i) => {
+      const b = img(this, SLING.x - 66 - i * 44, GROUND_Y - BIRD_TYPES[t].r, `bird_${t}`).setDepth(8);
+      this.tweens.add({ targets: b, y: b.y - 14, duration: 260, yoyo: true, repeat: -1, repeatDelay: 900 + i * 320, ease: 'Quad.easeOut' });
+    });
+    const list = []; LEVELS[LEVELS.length - 1].build(list);                  // ป้อมตกแต่ง (ภาพนิ่ง)
+    for (const d of list) {
+      if (d.k === 'pig') img(this, d.x, GROUND_Y - d.y - PIG_TYPES[d.type].r, Tex.pig(this, d.type, 'base')).setDepth(5);
+      else img(this, d.x, GROUND_Y - d.y - d.h / 2, Tex.block(this, d.m, d.w, d.h, d.shape, false)).setDepth(d.m === 'rock' ? 4 : 5);
+    }
+    this.onResize();
+    this.scale.on('resize', this.onResize, this);
+    const kb = this.input.keyboard;
+    if (kb) {
+      kb.on('keydown-ENTER', () => this.playLevel(Save.nextLevel()));
+      kb.on('keydown-M', () => { Sfx.enabled = !Sfx.enabled; this.ui && this.ui.refreshSound(); });
+    }
+    this.events.once('shutdown', () => { this.scale.off('resize', this.onResize, this); this.scene.stop('UI'); });
+    this.scene.launch('UI', { mode: 'menu', gs: this });
+  }
+  onResize() { const f = cameraFit(this); this.viewW = f.viewW; this.viewH = f.viewH; }
+  update(time, delta) {
+    this.bd.update(delta);
+    this.cameras.main.centerOn(this.viewW / 2 + WORLD_LEFT + 20 + (1 - Math.cos(time / 6000)) * 90, WORLD_BOTTOM - this.viewH / 2);
+  }
+  playLevel(i) { this.scene.start('Game', { level: i }); }
+}
+
+class GameScene extends Phaser.Scene {
+  constructor() { super('Game'); }
+
+  init(data) {
+    this.levelIndex = Phaser.Math.Clamp((data && data.level) || 0, 0, LEVELS.length - 1);
+    this.level = LEVELS[this.levelIndex];
+    this.worldW = this.level.width;
+    this.state = 'intro';            // intro | loading | ready | aiming | flying | waiting | won | lost
+    this.paused = false;
+    this.score = 0; this.steps = 0; this.acc = 0;
+    this.blocks = []; this.pigs = []; this.killQueue = [];
+    this.queue = []; this.loadedBird = null; this.flyers = []; this.mainBird = null;
+    this.birdsUsed = 0; this.resultShown = false; this.trailCount = 0;
+    this.camCur = 0; this.camTarget = 0; this.pan = null; this.lastPan = -1e9; this.camManual = false;
+    this.lastDust = 0; this.ui = null;
+  }
+
+  create() {
+    this.time.paused = false;                // เผื่อกดเริ่มใหม่ขณะหยุดเกม (นาฬิกา/ทวีนของฉากค้างสถานะเดิม)
+    this.tweens.resumeAll();
+    Tex.ensureAll(this);
+    this.bd = buildBackdrop(this, this.worldW);
+    this.matter.add.rectangle(this.worldW / 2, GROUND_Y + 100, this.worldW + 4000, 200, {
+      isStatic: true, label: 'ground', friction: 0.9, frictionStatic: 1, restitution: 0.1,
+    });
+    this.shadowG = this.add.graphics().setDepth(1);
+    this.createSlingshot();
+    this.buildLevel();
+    this.setupInput();
+    this.matter.world.on('collisionstart', this.onCollisionStart, this);
+
+    this.onResize();
+    this.scale.on('resize', this.onResize, this);
+    this.events.once('shutdown', () => { this.scale.off('resize', this.onResize, this); this.scene.stop('UI'); });
+
+    // กล้องเปิดฉาก: เริ่มที่ป้อม แล้วค่อยแพนกลับมาที่หนังสติ๊ก
+    this.camCur = this.camTarget = this.camMax;
+    this.applyCamera();
+    this.time.delayedCall(1300, () => { this.camTarget = this.camMin; });
+    this.time.delayedCall(2300, () => { if (this.state === 'intro') this.loadNextBird(); });
+    this.scene.launch('UI', { mode: 'game', gs: this });
+  }
+
+  // ───── กล้อง / ขนาดจอ ─────
+  onResize() {
+    const f = cameraFit(this);
+    this.viewW = f.viewW; this.viewH = f.viewH;
+    const right = this.worldW + 60;
+    this.camMin = WORLD_LEFT + this.viewW / 2;
+    this.camMax = Math.max(this.camMin, right - this.viewW / 2);
+    if (this.viewW >= right - WORLD_LEFT) this.camMin = this.camMax = (WORLD_LEFT + right) / 2;
+    this.grabR = Math.max(CFG.sling.grabRadius, 46 * DPR / f.zoom);
+    this.camCur = Phaser.Math.Clamp(this.camCur, this.camMin, this.camMax);
+    this.camTarget = Phaser.Math.Clamp(this.camTarget, this.camMin, this.camMax);
+    this.applyCamera();
+  }
+  applyCamera() { this.cameras.main.centerOn(this.camCur, WORLD_BOTTOM - this.viewH / 2); }
+  updateCamera(dt) {
+    const st = this.state;
+    if (!this.pan) {
+      if (st === 'flying') { const lead = this.leadBird(); if (lead) this.camTarget = lead.x + this.viewW * 0.1; }
+      else if ((st === 'ready' || st === 'loading' || st === 'aiming') && (!this.camManual || this.time.now - this.lastPan > 2600)) {
+        this.camTarget = this.camMin; this.camManual = false;
+      }
+      this.camTarget = Phaser.Math.Clamp(this.camTarget, this.camMin, this.camMax);
+      const rate = st === 'flying' ? 5 : st === 'intro' ? 1.7 : 3;
+      this.camCur += (this.camTarget - this.camCur) * (1 - Math.exp(-rate * dt / 1000));
+    }
+    this.applyCamera();
+  }
+  leadBird() { let best = null; for (const b of this.flyers) if (b.active && (!best || b.x > best.x)) best = b; return best; }
+
+  // ───── ลูปหลัก: ฟิสิกส์ fixed timestep ─────
+  update(time, delta) {
+    if (!this.paused) {
+      this.acc += Math.min(delta, 250);
+      let n = 0;
+      while (this.acc >= STEP_MS && n < 4) {
+        this.matter.world.step(STEP_MS);
+        this.afterStep();
+        this.acc -= STEP_MS;
+        n++;
+      }
+      if (n === 4) this.acc = 0;
+    }
+    this.updateCamera(delta);
+    this.bd.update(delta);
+    this.animateCharacters(time);
+    this.drawShadows();
+  }
+
+  afterStep() {
+    this.steps++;
+    if (this.killQueue.length) {
+      const q = this.killQueue; this.killQueue = [];
+      q.forEach((go) => this.destroyEntity(go, 'hp'));
+    }
+    for (const go of this.pigs.slice()) if (go.x < WORLD_LEFT - 30 || go.x > this.worldW + 40 || go.y > WORLD_BOTTOM + 60) this.destroyEntity(go, 'oob');
+    for (const go of this.blocks.slice()) if (go.x < -400 || go.x > this.worldW + 400 || go.y > WORLD_BOTTOM + 250) this.destroyEntity(go, 'oob');
+
+    for (const b of this.flyers.slice()) {
+      if (!b.active) continue;
+      b.steps++;
+      if (b === this.mainBird && !b.hit && b.steps % 3 === 0) this.addTrailDot(b.x, b.y);
+      b.idle = b.body.speed < 0.35 ? b.idle + 1 : 0;
+      const oob = b.x > this.worldW + 200 || b.x < WORLD_LEFT - 200 || b.y > WORLD_BOTTOM + 150;
+      if (b.btype === 'boom' && b.hit && !b.exploded && b.steps - b.hitStep > 120) { this.explodeBird(b); continue; }
+      if (oob || b.idle > 45 || b.steps > 600) {
+        if (b.btype === 'boom' && !b.exploded && !oob && !b.abilityUsedByTap) this.explodeBird(b);
+        else this.retireBird(b, !oob);
+      }
+    }
+    if (this.state === 'flying' && this.flyers.length === 0) {
+      this.state = 'waiting'; this.waitSteps = 0;
+      this.ui && this.ui.setAbility(null);
+    } else if (this.state === 'waiting') {
+      this.waitSteps++;
+      if ((this.waitSteps > 30 && this.isSettled()) || this.waitSteps > 240) this.afterSettle();
+    }
+  }
+
+  // ───── สร้างฉาก / วัตถุ ─────
+  createSlingshot() {
+    img(this, SLING.x, GROUND_Y, 'sling_back').setOrigin(0.5, 1).setDepth(4);
+    img(this, SLING.x, GROUND_Y, 'sling_front').setOrigin(0.5, 1).setDepth(9);
+    this.bandBackG = this.add.graphics().setDepth(6);
+    this.bandFrontG = this.add.graphics().setDepth(9.5);
+    this.aimG = this.add.graphics().setDepth(3);
+    this.trailG = this.add.graphics().setDepth(3);
+    this.drawBands(null);
+  }
+
+  buildLevel() {
+    const list = [];
+    this.level.build(list);
+    this.pigTotal = 0; this.blockTotal = 0;
+    for (const d of list) {
+      if (d.k === 'pig') { this.spawnPig(d); this.pigTotal += PIG_TYPES[d.type].score; }
+      else if (MATERIALS[d.m].static) this.spawnTerrain(d);
+      else { this.spawnBlock(d); this.blockTotal += MATERIALS[d.m].score; }
+    }
+    this.level.birds.forEach((t, i) => {
+      const s = this.queueSlot(i, t);
+      const im = img(this, s.x, s.y, `bird_${t}`).setDepth(8);
+      Object.assign(im, { btype: t, texBase: `bird_${t}`, texBlink: `bird_${t}_blink`, blinkAt: 800 + Math.random() * 3000 });
+      this.queue.push(im);
+      this.idleHop(im, i);
+    });
+  }
+
+  spawnTerrain(d) {
+    const cy = GROUND_Y - d.y - d.h / 2;
+    img(this, d.x, cy, Tex.block(this, d.m, d.w, d.h, 'rect', false)).setDepth(4);
+    this.matter.add.rectangle(d.x, cy, d.w, d.h, { isStatic: true, label: 'terrain', friction: 0.9, frictionStatic: 1, restitution: 0.05 });
+  }
+
+  spawnBlock(d) {
+    const M = MATERIALS[d.m];
+    const o = { label: 'block', density: M.density, friction: M.friction, frictionStatic: 1, restitution: M.restitution };
+    let cy = GROUND_Y - d.y - d.h / 2;
+    if (d.shape === 'ball') { o.shape = { type: 'circle', radius: (d.w / 2) * TEX }; o.frictionAir = 0.008; }
+    else if (d.shape === 'tri') {
+      o.shape = { type: 'fromVerts', verts: [{ x: 0, y: d.h * TEX }, { x: (d.w / 2) * TEX, y: 0 }, { x: d.w * TEX, y: d.h * TEX }] };
+      cy = GROUND_Y - d.y - d.h / 3;                        // จุดศูนย์ถ่วงสามเหลี่ยม
+    }
+    const go = this.matter.add.image(d.x, cy, Tex.block(this, d.m, d.w, d.h, d.shape, false), null, o);
+    go.setScale(1 / TEX).setDepth(5);
+    const area = d.shape === 'rect' ? d.w * d.h : d.shape === 'tri' ? (d.w * d.h) / 2 : (Math.PI * d.w * d.w) / 4;
+    Object.assign(go, { kind: 'block', mat: d.m, shape: d.shape, bw: d.w, bh: d.h });
+    go.maxHp = go.hp = M.hp * Phaser.Math.Clamp(Math.sqrt(area / 2000), 0.7, 1.6);
+    this.blocks.push(go);
+  }
+
+  spawnPig(d) {
+    const T = PIG_TYPES[d.type];
+    const go = this.matter.add.image(d.x, GROUND_Y - d.y - T.r, Tex.pig(this, d.type, 'base'), null, {
+      label: 'pig', shape: { type: 'circle', radius: T.r * TEX },
+      density: T.density, friction: 0.9, frictionStatic: 1, restitution: 0.1, frictionAir: 0.01,
+    });
+    go.setScale(1 / TEX).setDepth(5);
+    Object.assign(go, {
+      kind: 'pig', pigType: d.type, texBase: Tex.pig(this, d.type, 'base'), texBlink: Tex.pig(this, d.type, 'blink'),
+      texHurt: Tex.pig(this, d.type, 'hurt'), blinkAt: 600 + Math.random() * 3000,
+    });
+    go.maxHp = go.hp = T.hp;
+    this.pigs.push(go);
+  }
+
+  queueSlot(i, type) { return { x: SLING.x - 64 - i * 38, y: GROUND_Y - BIRD_TYPES[type].r }; }
+  idleHop(im, i) {
+    this.tweens.add({ targets: im, y: GROUND_Y - BIRD_TYPES[im.btype].r - 10, duration: 220, yoyo: true, ease: 'Quad.easeOut', repeat: -1, repeatDelay: 1300 + i * 260 + Math.random() * 700 });
+  }
+
+  createBird(type, x, y) {
+    const T = BIRD_TYPES[type];
+    const b = this.matter.add.image(x, y, `bird_${type}`, null, {
+      label: 'bird', shape: { type: 'circle', radius: T.r * TEX }, density: T.density, restitution: T.restitution,
+      friction: 0.6, frictionAir: CFG.birdAir, collisionFilter: { group: -1 },         // นกไม่ชนกันเอง
+    });
+    b.setScale(1 / TEX).setDepth(8);
+    Object.assign(b, { kind: 'bird', btype: type, steps: 0, idle: 0, hit: false, hitStep: 0, abilityUsed: true, exploded: false });
+    return b;
+  }
+
+  // ───── หนังสติ๊ก ─────
+  loadNextBird() {
+    if (this.state === 'won' || this.state === 'lost' || !this.queue.length) return;
+    const im = this.queue.shift();
+    this.tweens.killTweensOf(im);
+    this.state = 'loading';
+    const sx = im.x, sy = GROUND_Y - BIRD_TYPES[im.btype].r;
+    this.tweens.addCounter({
+      from: 0, to: 1, duration: 440, ease: 'Sine.easeInOut',
+      onUpdate: (tw) => {
+        const t = tw.getValue();
+        im.x = sx + (SLING.x - sx) * t;
+        im.y = sy + (SLING.y - sy) * t - Math.sin(Math.PI * t) * 80;
+        im.rotation = -0.6 * Math.sin(Math.PI * t);
+      },
+      onComplete: () => {
+        im.setPosition(SLING.x, SLING.y).setRotation(0);
+        this.loadedBird = im;
+        this.drawBands(SLING.x, SLING.y);
+        if (this.state === 'loading') { this.state = 'ready'; this.onBirdReady(im.btype); }
+      },
+    });
+    this.queue.forEach((q, i) => {
+      this.tweens.killTweensOf(q);
+      const s = this.queueSlot(i, q.btype);
+      this.tweens.add({ targets: q, x: s.x, y: s.y, duration: 300, delay: 150, onComplete: () => this.idleHop(q, i) });
+    });
+  }
+
+  onBirdReady(type) {
+    if (!this.ui) return;
+    this.ui.setAbility(type, 'ready');
+    if (BIRD_TYPES[type].ability && !Save.data.seen[type]) {
+      Save.data.seen[type] = true; Save.save();
+      this.ui.showNewBird(type);
+    }
+  }
+
+  drawBands(bx, by) {
+    const back = this.bandBackG.clear(), front = this.bandFrontG.clear();
+    if (bx == null) { back.lineStyle(6, 0x3b1d0b).lineBetween(TIP_BACK.x, TIP_BACK.y, TIP_FRONT.x, TIP_FRONT.y); return; }
+    let dx = bx - SLING.x, dy = by - SLING.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 1) { dx = -1; dy = 0; } else { dx /= len; dy /= len; }
+    const px = bx + dx * 13, py = by + dy * 13;
+    const thick = Math.max(4, 8 - len / 40);                              // ยางยืดมาก = เส้นบางลง
+    back.lineStyle(thick, 0x3b1d0b).lineBetween(TIP_BACK.x, TIP_BACK.y, px, py);
+    back.fillStyle(0x2a1407).fillCircle(px, py, 8);
+    front.lineStyle(thick + 1, 0x4d2711).lineBetween(TIP_FRONT.x, TIP_FRONT.y, px, py);
+  }
+
+  drawAim(bx, by) {
+    const g = this.aimG.clear();
+    let vx = (SLING.x - bx) * CFG.sling.power, vy = (SLING.y - by) * CFG.sling.power, x = bx, y = by;
+    const fa = 1 - CFG.birdAir;
+    for (let i = 1; i <= 80; i++) {                                        // สมการเดียวกับ Matter (Verlet) → เส้นเล็งตรงกับของจริง
+      vx *= fa; vy = vy * fa + GRAVITY_STEP; x += vx; y += vy;
+      if (y > GROUND_Y || x > this.worldW) break;
+      if (i % 4 === 0) {
+        const a = Math.max(0.15, 0.95 - i / 90), rad = Math.max(2, 5.5 - i / 20);
+        g.fillStyle(0x0b1d3a, a * 0.25).fillCircle(x + 1, y + 1.5, rad);
+        g.fillStyle(0xffffff, a).fillCircle(x, y, rad);
+      }
+    }
+  }
+
+  addTrailDot(x, y) {
+    this.trailCount++;
+    const big = this.trailCount % 3 === 0;
+    this.trailG.fillStyle(0xffffff, 0.9).fillCircle(x, y, big ? 4.5 : 2.5);
+  }
+
+  // ───── อินพุต ─────
+  setupInput() {
+    this.input.on('pointerdown', (p) => this.onDown(p));
+    this.input.on('pointermove', (p) => this.onMove(p));
+    this.input.on('pointerup', () => this.onUp());
+    this.input.on('pointerupoutside', () => this.onUp());
+    this.input.on('wheel', (p, over, dx, dy) => {
+      if (['ready', 'loading', 'waiting'].includes(this.state)) {
+        this.camManual = true; this.lastPan = this.time.now;
+        this.camTarget = Phaser.Math.Clamp(this.camTarget + (dy + dx) * 0.9, this.camMin, this.camMax);
+      }
+    });
+    const kb = this.input.keyboard;
+    if (kb) {
+      kb.on('keydown-R', () => this.restartLevel());
+      kb.on('keydown-N', () => { if (this.resultShown && this.state === 'won') this.nextLevel(); });
+      kb.on('keydown-M', () => this.toggleSound());
+      kb.on('keydown-SPACE', () => { if (this.state === 'flying') this.useAbility(); });
+      kb.on('keydown-ESC', () => { if (!this.resultShown) this.ui && this.ui.togglePause(); });
+      kb.on('keydown-D', () => this.toggleDebug());
+    }
+  }
+
+  onDown(p) {
+    Sfx.unlock();
+    if (this.paused) return;
+    if (this.state === 'flying') { this.useAbility(); return; }
+    if (this.state === 'ready' && this.loadedBird &&
+        Phaser.Math.Distance.Between(p.worldX, p.worldY, this.loadedBird.x, this.loadedBird.y) <= this.grabR) {
+      this.state = 'aiming'; this.camManual = false;
+      this.ui && this.ui.hideHelp();
+      Sfx.play('stretch');
+      this.dragTo(p);
+      return;
+    }
+    if (['ready', 'loading', 'waiting'].includes(this.state)) this.pan = { sx: p.x, c0: this.camCur };
+  }
+  onMove(p) {
+    if (this.state === 'aiming') { this.dragTo(p); return; }
+    if (this.pan && p.isDown) {
+      const dx = (p.x - this.pan.sx) / this.cameras.main.zoom;
+      if (Math.abs(dx) > 4) this.camManual = true;
+      this.camCur = this.camTarget = Phaser.Math.Clamp(this.pan.c0 - dx, this.camMin, this.camMax);
+      this.lastPan = this.time.now;
+    }
+  }
+  onUp() {
+    if (this.state === 'aiming') this.release();
+    this.pan = null;
+  }
+
+  dragTo(p) {
+    if (this.state !== 'aiming' || !this.loadedBird) return;
+    let dx = p.worldX - SLING.x, dy = p.worldY - SLING.y;
+    const len = Math.hypot(dx, dy);
+    if (len > CFG.sling.maxPull) { dx *= CFG.sling.maxPull / len; dy *= CFG.sling.maxPull / len; }
+    const r = BIRD_TYPES[this.loadedBird.btype].r;
+    const bx = SLING.x + dx, by = Math.min(SLING.y + dy, GROUND_Y - r - 1);
+    this.loadedBird.setPosition(bx, by);
+    this.loadedBird.rotation = Math.atan2(SLING.y - by, SLING.x - bx);
+    this.drawBands(bx, by);
+    this.drawAim(bx, by);
+  }
+
+  release() {
+    const b = this.loadedBird;
+    if (!b) return;
+    const pullX = SLING.x - b.x, pullY = SLING.y - b.y;
+    this.aimG.clear();
+    if (Math.hypot(pullX, pullY) < CFG.sling.minPull) {
+      this.state = 'ready';
+      b.setPosition(SLING.x, SLING.y).setRotation(0);
+      this.drawBands(SLING.x, SLING.y);
+      return;
+    }
+    this.launch(pullX, pullY);
+  }
+
+  launch(pullX, pullY) {
+    const im = this.loadedBird;
+    this.loadedBird = null;
+    const type = im.btype, x = im.x, y = im.y, rot = im.rotation;
+    im.destroy();
+    const b = this.createBird(type, x, y);
+    b.setRotation(rot);
+    b.setVelocity(pullX * CFG.sling.power, pullY * CFG.sling.power);
+    b.abilityUsed = !BIRD_TYPES[type].ability;
+    this.flyers = [b]; this.mainBird = b;
+    this.birdsUsed++;
+    this.trailG.clear(); this.trailCount = 0;
+    this.state = 'flying';
+    this.drawBands(null);
+    Sfx.play('launch');
+    this.ui && this.ui.setAbility(b.abilityUsed ? null : type, 'flying');
+  }
+
+  // ───── ความสามารถพิเศษของนก ─────
+  /** 🔧 ต่อยอด: เพิ่ม case ใหม่ตาม BIRD_TYPES[x].ability */
+  useAbility() {
+    const b = this.mainBird;
+    if (!b || !b.active || b.abilityUsed) return;
+    const T = BIRD_TYPES[b.btype];
+    if (!T.ability) return;
+    b.abilityUsed = true;
+    this.ui && this.ui.setAbility(null);
+    const v = b.body.velocity, sp = Math.hypot(v.x, v.y) || 1, ang = Math.atan2(v.y, v.x);
+    if (T.ability === 'dash') {
+      const ns = Math.min(30, Math.max(sp * 2.1, 20));
+      b.setVelocity(Math.cos(ang) * ns, Math.sin(ang) * ns);
+      b.dashing = true;
+      const em = this.add.particles(0, 0, 'streak', {
+        follow: b, lifespan: 260, frequency: 22, speed: 0, alpha: { start: 0.9, end: 0 },
+        scale: { start: 1.3 / TEX, end: 0.4 / TEX }, rotate: { onEmit: () => Phaser.Math.RadToDeg(Math.atan2(b.body ? b.body.velocity.y : 0, b.body ? b.body.velocity.x : 1)) },
+      }).setDepth(7);
+      b.emitter = em;
+      this.time.delayedCall(700, () => { if (em.active) { em.stop(); em.stopFollow(); } });
+      this.time.delayedCall(1100, () => em.destroy());
+      this.burst('puff', b.x, b.y, 6, { smin: 40, smax: 120, gravity: 0, scale: 1.2 });
+      Sfx.play('dash');
+    } else if (T.ability === 'split') {
+      const px = -Math.sin(ang), py = Math.cos(ang);
+      for (const s of [-1, 1]) {
+        const a = ang + s * 0.22, off = (T.r * 2 + 4) * s;
+        const nb = this.createBird(b.btype, b.x + px * off, b.y + py * off);
+        nb.setVelocity(Math.cos(a) * sp * 1.05, Math.sin(a) * sp * 1.05);
+        this.flyers.push(nb);
+      }
+      this.burst('puff', b.x, b.y, 8, { smin: 40, smax: 140, gravity: 0, scale: 1.3 });
+      this.burst('feather', b.x, b.y, 6, { smin: 60, smax: 160, gravity: 200 });
+      Sfx.play('split');
+    } else if (T.ability === 'boom') {
+      b.abilityUsedByTap = true;
+      this.explodeBird(b);
+    }
+  }
+
+  explodeBird(b) {
+    if (b.exploded) return;
+    b.exploded = true;
+    const x = b.x, y = b.y;
+    this.retireBird(b, false);
+    this.explode(x, y, CFG.explosion);
+  }
+
+  retireBird(b, effect = true) {
+    Phaser.Utils.Array.Remove(this.flyers, b);
+    if (b.emitter && b.emitter.active) { b.emitter.stopFollow(); b.emitter.stop(); }
+    if (effect && b.active) {
+      this.burst('puff', b.x, b.y, 8, { smin: 30, smax: 120, gravity: -40, scale: 1.4 });
+      this.burst('feather', b.x, b.y, 7, { smin: 60, smax: 180, gravity: 200 });
+      Sfx.play('poof');
+    }
+    if (b.active) b.destroy();
+    this.wakeAll();
+  }
+
+  /** ระเบิด: ผลักทุกชิ้นออกจากจุดศูนย์กลาง + ความเสียหายตามระยะ (ใช้กับนกประทัดและลัง TNT) */
+  explode(x, y, o) {
+    const MJ = Phaser.Physics.Matter.Matter;
+    for (const go of this.blocks.concat(this.pigs)) {
+      if (!go.active || go.dead) continue;
+      const dx = go.x - x, dy = go.y - y, d = Math.hypot(dx, dy);
+      const size = go.kind === 'pig' ? PIG_TYPES[go.pigType].r : Math.max(go.bw, go.bh) / 2;
+      const reach = o.radius + size * 0.5;
+      if (d > reach) continue;
+      const k = Phaser.Math.Clamp(1 - d / reach, 0, 1);
+      const nx = d > 1 ? dx / d : 0, ny = d > 1 ? dy / d : -1;
+      const body = go.body;
+      MJ.Sleeping.set(body, false);
+      const dv = Math.min(24, (o.force * k) / Math.sqrt(Math.max(body.mass, 0.6)));
+      MJ.Body.setVelocity(body, { x: body.velocity.x + nx * dv, y: body.velocity.y + ny * dv - 1.5 * k });
+      MJ.Body.setAngularVelocity(body, body.angularVelocity + (Math.random() - 0.5) * 0.25 * k);
+      this.damage(go, o.damage * k);
+    }
+    this.fxExplosion(x, y, o.radius);
+    Sfx.play('boom');
+    this.wakeAll();
+  }
+
+  afterSettle() {
+    if (this.state !== 'waiting' || this.pigs.length === 0) return;
+    if (this.queue.length) this.loadNextBird();
+    else { this.state = 'lost'; this.time.delayedCall(700, () => this.showLose()); }
+  }
+
+  isSettled() {
+    for (const go of this.blocks.concat(this.pigs)) {
+      const b = go.body;
+      if (!b || b.isSleeping) continue;
+      if (b.speed > 0.15 || b.angularSpeed > 0.01) return false;
+    }
+    return true;
+  }
+
+  wakeAll() {
+    const Sleeping = Phaser.Physics.Matter.Matter.Sleeping;
+    for (const go of this.blocks.concat(this.pigs)) if (go.body && go.body.isSleeping) Sleeping.set(go.body, false);
+  }
+
+  // ───── การชน & ความเสียหาย ─────
+  onCollisionStart(event) {
+    for (const pair of event.pairs) {
+      const A = pair.bodyA.parent, B = pair.bodyB.parent;
+      const ga = A.gameObject, gb = B.gameObject;
+      if (ga && ga.kind === 'bird') this.markBirdHit(ga);
+      if (gb && gb.kind === 'bird') this.markBirdHit(gb);
+      if (this.steps < CFG.damage.graceSteps) continue;
+      const n = pair.collision.normal;
+      const rel = Math.abs((A.velocity.x - B.velocity.x) * n.x + (A.velocity.y - B.velocity.y) * n.y);
+      if (rel < CFG.damage.threshold) continue;
+      this.applyImpact(A, B, rel);
+      this.applyImpact(B, A, rel);
+      if (rel > 2.5) Sfx.play('hit', rel / 12);
+      const floor = A.isStatic || B.isStatic;
+      if (floor && rel > 4.5 && this.time.now - this.lastDust > 70) {
+        const s = pair.collision.supports && pair.collision.supports[0];
+        if (s) { this.lastDust = this.time.now; this.burst('dust', s.x, s.y, 6, { smin: 20, smax: 100, gravity: -20, scale: 1.3, endScale: 2.2, alpha: 0.75, amin: 180, amax: 360, life: [500, 900] }); }
+      }
+    }
+  }
+
+  markBirdHit(b) {
+    if (b.hit) return;
+    b.hit = true; b.hitStep = b.steps;
+    if (b === this.mainBird && !b.abilityUsed && b.btype !== 'boom') {  // ชนแล้วหมดสิทธิ์พุ่ง/แยกร่าง (ยกเว้นนกประทัด)
+      b.abilityUsed = true;
+      this.ui && this.ui.setAbility(null);
+    }
+  }
+
+  /** ความเสียหาย ∝ การเปลี่ยนความเร็ว (Δv) ที่วัตถุได้รับ — ของเบาโดนของหนักพังง่าย, ตกกระแทกพื้นเจ็บเต็มๆ */
+  applyImpact(self, other, rel) {
+    const go = self.gameObject;
+    if (!go || go.dead || !go.maxHp) return;
+    const ratio = other.isStatic ? 1 : other.mass / (self.mass + other.mass);
+    const dv = rel * ratio;
+    let mult = 1;
+    const og = other.gameObject;
+    if (og && og.kind === 'bird') {
+      const vs = BIRD_TYPES[og.btype].vs[go.kind === 'pig' ? 'pig' : go.mat] || 1;
+      mult = CFG.damage.birdMultiplier * vs * (og.dashing ? 1.3 : 1);
+    }
+    this.damage(go, (dv - CFG.damage.threshold) * CFG.damage.scale * mult);
+  }
+
+  damage(go, amount) {
+    if (!go || go.dead || !go.maxHp || amount <= 0) return;
+    go.hp -= amount;
+    if (go.hp <= 0) { go.dead = true; this.killQueue.push(go); }
+    else this.updateDamageLook(go);
+  }
+
+  updateDamageLook(go) {
+    if (go.kind === 'block' && !go.cracked && go.hp < go.maxHp * 0.5) {
+      go.cracked = true;
+      go.setTexture(Tex.block(this, go.mat, go.bw, go.bh, go.shape, true));
+    } else if (go.kind === 'pig' && !go.hurt && go.hp < go.maxHp * 0.6) {
+      go.hurt = true;
+      go.setTexture(go.texHurt);
+    }
+  }
+
+  destroyEntity(go, reason) {
+    if (!go || !go.active) return;
+    const x = go.x, y = go.y, kind = go.kind;
+    let boom = false;
+    if (kind === 'pig') {
+      Phaser.Utils.Array.Remove(this.pigs, go);
+      const T = PIG_TYPES[go.pigType];
+      this.addScore(T.score, x, y - 14, '#b6ff7a', go.pigType === 'boss' ? 44 : 34);
+      this.burst('puff_green', x, y, 16, { smin: 40, smax: 220, gravity: -30, scale: 1.7 });
+      this.burst('puff', x, y, 6, { smin: 20, smax: 90, gravity: -60, scale: 1.2 });
+      if (go.pigType === 'helmet') this.burst('chip_metal', x, y - 10, 6, { smin: 80, smax: 220 });
+      Sfx.play('pig');
+      if (go.pigType === 'boss') this.cameras.main.shake(260, 0.007);
+    } else {
+      Phaser.Utils.Array.Remove(this.blocks, go);
+      if (reason !== 'oob') {
+        const M = MATERIALS[go.mat];
+        this.addScore(M.score, x, y, M.popup, 22);
+        this.burst(M.chip, x, y, Math.min(26, 8 + Math.round((go.bw * go.bh) / 300)));
+        if (M.sfx) Sfx.play(M.sfx);
+        if (go.mat === 'stone' || go.mat === 'metal') this.cameras.main.shake(110, 0.003);
+        boom = !!M.explosive;
+      }
+    }
+    go.destroy();
+    if (boom) this.explode(x, y, CFG.tnt);           // ลัง TNT ระเบิดต่อเป็นลูกโซ่ได้
+    this.wakeAll();
+    this.ui && this.ui.setPigs(this.pigs.length);
+    if (kind === 'pig' && this.pigs.length === 0) this.onAllPigsDead();
+  }
+
+  // ───── ภาพ / เอฟเฟกต์ ─────
+  animateCharacters(time) {
+    for (const p of this.pigs) {
+      if (p.hurt || time < p.blinkAt) continue;
+      p.blinking = !p.blinking;
+      p.setTexture(p.blinking ? p.texBlink : p.texBase);
+      p.blinkAt = time + (p.blinking ? 140 : 1800 + Math.random() * 3400);
+    }
+    const birds = this.loadedBird ? this.queue.concat([this.loadedBird]) : this.queue;
+    for (const b of birds) {
+      if (time < b.blinkAt) continue;
+      b.blinking = !b.blinking;
+      b.setTexture(b.blinking ? b.texBlink : b.texBase);
+      b.blinkAt = time + (b.blinking ? 130 : 2000 + Math.random() * 3000);
+    }
+  }
+
+  drawShadows() {
+    const g = this.shadowG.clear();
+    const shadow = (cx, w, bottom) => {
+      const hgt = GROUND_Y - bottom;
+      if (hgt < -6 || hgt > 170) return;
+      const a = 0.24 * (1 - Math.max(0, hgt) / 170);
+      g.fillStyle(0x0f2a0c, a).fillEllipse(cx, GROUND_Y + 3, w * (1 - Math.max(0, hgt) / 420) + 8, 9);
+    };
+    for (const o of this.blocks.concat(this.pigs, this.flyers)) {
+      if (!o.active || !o.body) continue;
+      const bd = o.body.bounds;
+      shadow((bd.min.x + bd.max.x) / 2, bd.max.x - bd.min.x, bd.max.y);
+    }
+    for (const q of this.queue) shadow(q.x, BIRD_TYPES[q.btype].r * 2, q.y + BIRD_TYPES[q.btype].r);
+    shadow(SLING.x, 26, GROUND_Y);
+  }
+
+  addScore(points, x, y, color, size) {
+    this.score += points;
+    this.ui && this.ui.setScore(this.score);
+    const res = Math.min(4, Math.max(2, Math.ceil(this.cameras.main.zoom * 1.2)));
+    const t = txt(this, x, y, fmt(points), size, color, { weight: 800, stroke: '#0b1d3a', st: 6, res }).setOrigin(0.5).setDepth(40);
+    t.setScale(0.6);
+    this.tweens.add({ targets: t, scale: 1, duration: 180, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: t, y: y - 70, alpha: 0, delay: 350, duration: 900, ease: 'Cubic.easeOut', onComplete: () => t.destroy() });
+  }
+
+  burst(key, x, y, count, o = {}) {
+    const sc = (o.scale ?? 1) / TEX;
+    const life = o.life || [500, 1000];
+    const em = this.add.particles(0, 0, key, {
+      speed: { min: o.smin ?? 90, max: o.smax ?? 320 },
+      angle: { min: o.amin ?? 0, max: o.amax ?? 360 },
+      rotate: { min: 0, max: 360 },
+      gravityY: o.gravity ?? 700,
+      lifespan: { min: life[0], max: life[1] },
+      scale: { start: sc, end: sc * (o.endScale ?? 0.2) },
+      alpha: { start: o.alpha ?? 1, end: 0 },
+      blendMode: o.add ? 'ADD' : 'NORMAL',
+      emitting: false,
+    }).setDepth(o.depth ?? 20);
+    em.explode(count, x, y);
+    this.time.delayedCall(life[1] + 300, () => em.destroy());
+  }
+
+  fxExplosion(x, y, R) {
+    const flash = this.add.image(x, y, 'flash').setDepth(30).setScale((R / 64) * 0.5 / TEX).setBlendMode(Phaser.BlendModes.ADD);
+    this.tweens.add({ targets: flash, scale: (R / 64) * 1.7 / TEX, alpha: 0, duration: 340, ease: 'Cubic.easeOut', onComplete: () => flash.destroy() });
+    const ring = this.add.graphics().setDepth(29), o = { t: 0 };
+    this.tweens.add({
+      targets: o, t: 1, duration: 420, ease: 'Cubic.easeOut',
+      onUpdate: () => ring.clear().lineStyle(10 * (1 - o.t) + 1, 0xfff1c4, 0.9 * (1 - o.t)).strokeCircle(x, y, R * o.t),
+      onComplete: () => ring.destroy(),
+    });
+    this.burst('fire', x, y, 18, { smin: 60, smax: 280, gravity: -80, scale: 1.5, endScale: 0.6, life: [280, 650], add: true, depth: 28 });
+    this.burst('smoke', x, y, 14, { smin: 30, smax: 170, gravity: -50, scale: 1.6, endScale: 2.4, alpha: 0.8, life: [800, 1500], depth: 27 });
+    this.burst('spark', x, y, 22, { smin: 220, smax: 560, gravity: 600, add: true, depth: 28 });
+    this.cameras.main.shake(320, 0.011);
+  }
+
+  // ───── ชนะ / แพ้ / เปลี่ยนด่าน ─────
+  onAllPigsDead() {
+    if (this.resultShown || this.state === 'won') return;
+    this.state = 'won';
+    this.aimG.clear();
+    if (this.loadedBird) { this.loadedBird.setPosition(SLING.x, SLING.y).setRotation(0); this.drawBands(SLING.x, SLING.y); }
+    this.ui && this.ui.setAbility(null);
+    this.time.delayedCall(1500, () => this.winSequence());
+  }
+
+  winSequence() {
+    const left = [this.loadedBird, ...this.queue].filter(Boolean);
+    if (left.length) { this.camManual = false; this.camTarget = this.camMin; }
+    left.forEach((im, i) => {
+      this.time.delayedCall(500 + i * 420, () => {
+        this.tweens.killTweensOf(im);
+        this.addScore(CFG.birdBonus, im.x, im.y - 34, '#ffd66b', 30);
+        this.burst('spark', im.x, im.y, 12, { smin: 60, smax: 180, gravity: 200, add: true });
+        Sfx.play('bonus');
+        im.setAlpha(0.35);
+      });
+    });
+    this.time.delayedCall(left.length * 420 + (left.length ? 1100 : 300), () => this.showWin());
+  }
+
+  starsEarned() {
+    const t2 = this.pigTotal + this.blockTotal * 0.35 + 5000;
+    const t3 = this.pigTotal + this.blockTotal * 0.6 + 15000;
+    return 1 + (this.score >= t2 ? 1 : 0) + (this.score >= t3 ? 1 : 0);
+  }
+
+  showWin() {
+    if (this.resultShown) return;
+    this.resultShown = true;
+    const stars = this.starsEarned();
+    const prev = Save.best(this.levelIndex).score;
+    const isNew = Save.record(this.levelIndex, stars, this.score);
+    Sfx.play('win');
+    this.ui && this.ui.showResult({ win: true, stars, score: this.score, best: Math.max(prev, this.score), isNew, last: this.levelIndex === LEVELS.length - 1 });
+  }
+
+  showLose() {
+    if (this.resultShown || this.pigs.length === 0) return;
+    this.resultShown = true;
+    Sfx.play('lose');
+    this.ui && this.ui.showResult({ win: false, pigsLeft: this.pigs.length, score: this.score });
+  }
+
+  nextLevel() {
+    if (this.levelIndex >= LEVELS.length - 1) this.goMenu(true);
+    else this.scene.start('Game', { level: this.levelIndex + 1 });
+  }
+  restartLevel() { this.scene.start('Game', { level: this.levelIndex }); }
+  playLevel(i) { this.scene.start('Game', { level: i }); }
+  goMenu(select) { this.scene.start('Title', { select: !!select }); }
+
+  setPaused(p) {
+    this.paused = p;
+    this.time.paused = p;
+    if (p) this.tweens.pauseAll(); else this.tweens.resumeAll();
+  }
+  toggleSound() { Sfx.enabled = !Sfx.enabled; this.ui && this.ui.refreshSound(); }
+  toggleDebug() {
+    const w = this.matter.world;
+    if (!w.debugGraphic) w.createDebugGraphic();
+    w.drawDebug = !w.drawDebug;
+    w.debugGraphic.clear();
+  }
+}
+
+// ───── ชั้น UI (HUD / เมนู / ป๊อปอัป) — แยกกล้อง ไม่ซูมตามโลก ─────
+class UIScene extends Phaser.Scene {
+  constructor() { super('UI'); }
+  init(d) { this.mode = d.mode; this.gs = d.gs; this.modal = null; this.fsState = null; this.cards = []; this.shownScore = 0; }
+
+  create() {
+    this.gs.ui = this;
+    if (this.mode === 'menu') this.buildMenu(); else this.buildHUD();
+    this.layout();
+    this.scale.on('resize', this.layout, this);
+    this.events.once('shutdown', () => { this.scale.off('resize', this.layout, this); if (this.gs && this.gs.ui === this) this.gs.ui = null; });
+    if (this.mode === 'menu' && this.gs.openSelect) this.showLevelSelect();
+  }
+
+  update() {
+    const fs = FS.active();
+    if (fs !== this.fsState) { this.fsState = fs; if (this.fsBtn) this.fsBtn.redraw(fs); }
+  }
+
+  topRightButtons(kinds) {
+    const c = this.add.container();
+    let x = -30;
+    for (const k of kinds) {
+      if (k === 'fs' && !FS.available) continue;
+      const cb = { fs: () => FS.toggle(), sound: () => this.toggleSound(), restart: () => this.gs.restartLevel(), pause: () => this.togglePause(), menu: () => this.gs.goMenu(false) }[k];
+      const b = makeIconButton(this, x, 30, k === 'menu' ? 'home' : k, cb, k === 'sound' ? Sfx.enabled : FS.active());
+      if (k === 'fs') this.fsBtn = b;
+      if (k === 'sound') this.soundBtn = b;
+      c.add(b);
+      x -= 64;
+    }
+    c.leftEdge = x + 30;
+    return c;
+  }
+  toggleSound() { Sfx.enabled = !Sfx.enabled; this.refreshSound(); }
+  refreshSound() { if (this.soundBtn) this.soundBtn.redraw(Sfx.enabled); }
+
+  // ───── HUD ระหว่างเล่น ─────
+  buildHUD() {
+    const gs = this.gs, best = Save.best(gs.levelIndex).score;
+    this.tl = this.add.container();
+    const g = this.add.graphics(); glassPanel(g, 0, 0, 410, 100, 20);
+    this.tl.add(g);
+    this.tl.add(txt(this, 18, 8, `ด่าน ${gs.levelIndex + 1} · ${gs.level.name}`, 24, '#ffd66b', { weight: 600 }).setOrigin(0, 0));
+    this.scoreText = txt(this, 18, 44, 'คะแนน 0', 28, '#ffffff', { weight: 800 }).setOrigin(0, 0);
+    this.tl.add(this.scoreText);
+    this.tl.add(txt(this, 394, 52, best ? `สถิติ ${fmt(best)}` : '', 18, '#bcd6ff').setOrigin(1, 0));
+
+    this.tr = this.topRightButtons(['fs', 'sound', 'restart', 'pause']);
+    const pill = this.add.graphics(); const pw = 132, px = this.tr.leftEdge - 14 - pw;
+    glassPanel(pill, px, 2, pw, 56, 28);
+    this.tr.add(pill);
+    this.tr.add(img(this, px + 34, 30, Tex.pig(this, 'normal', 'base')).setScale(0.62 / TEX));
+    this.pigText = txt(this, px + 60, 30, `× ${gs.pigs.length}`, 26, '#b6ff7a', { weight: 800 }).setOrigin(0, 0.5);
+    this.tr.add(this.pigText);
+    this.trWidth = -px;
+
+    this.abil = this.add.container().setVisible(false);
+    this.abilBg = this.add.graphics();
+    this.abilIcon = img(this, 0, 0, 'bird_pilot');
+    this.abilText = txt(this, 0, 0, '', 21, '#ffffff', { weight: 600 }).setOrigin(0, 0.5);
+    this.abil.add([this.abilBg, this.abilIcon, this.abilText]);
+
+    this.help = txt(this, 0, 0, 'ลากนกถอยหลังแล้วปล่อยเพื่อยิง  ·  ลากพื้นที่ว่างเพื่อเลื่อนกล้อง  ·  แตะจอ/Space ระหว่างบิน = ใช้พลังนก', 17, '#ffffff', { weight: 400, stroke: '#0b1d3a', st: 4 })
+      .setOrigin(0.5, 1).setAlpha(0.9);
+    this.showBanner();
+  }
+
+  layout() {
+    const w = this.scale.width, h = this.scale.height, s = uiScale(w, h), m = 14 * s;
+    this.s = s;
+    if (this.tl) this.tl.setPosition(m, m).setScale(s);
+    if (this.tr) {
+      const portrait = h > w && (410 + this.trWidth) * s + 3 * m > w;
+      this.tr.setPosition(w - m, portrait ? m + 112 * s : m).setScale(s);
+    }
+    if (this.abil) this.abil.setPosition(w / 2, m + (h > w ? 200 : 30) * s).setScale(s);
+    if (this.help) this.help.setPosition(w / 2, h - 10 * s).setScale(s);
+    if (this.menu) this.menu.setPosition(w / 2, h / 2).setScale(s);
+    if (this.trMenu) this.trMenu.setPosition(w - m, m).setScale(s);
+    if (this.banner) this.banner.setPosition(w / 2, h * 0.42).setScale(s);
+    if (this.newBird) this.newBird.setPosition(w / 2, h * 0.3).setScale(s);
+    if (this.modal) this.modal.box.setPosition(w / 2, h / 2).setScale(s * Math.min(1, (h / s) / 520));
+  }
+
+  setScore(v) {
+    if (!this.scoreText) return;
+    if (this.scoreTween) this.scoreTween.stop();
+    const from = this.shownScore;
+    this.scoreTween = this.tweens.addCounter({
+      from, to: v, duration: 450,
+      onUpdate: (tw) => { this.shownScore = tw.getValue(); this.scoreText.setText('คะแนน ' + fmt(this.shownScore)); },
+    });
+    this.tweens.add({ targets: this.scoreText, scale: { from: 1.12, to: 1 }, duration: 250 });
+  }
+  setPigs(n) {
+    if (!this.pigText) return;
+    this.pigText.setText(`× ${n}`);
+    this.tweens.add({ targets: this.pigText, scale: { from: 1.35, to: 1 }, duration: 300, ease: 'Back.easeOut' });
+  }
+  hideHelp() { if (this.help && this.help.alpha > 0.5) this.tweens.add({ targets: this.help, alpha: 0.35, duration: 400 }); }
+
+  setAbility(type, phase) {
+    if (!this.abil) return;
+    const T = type && BIRD_TYPES[type];
+    if (!T || !T.ability) { this.abil.setVisible(false); this.tweens.killTweensOf(this.abil); return; }
+    const label = phase === 'flying' ? `แตะจอ หรือกด Space = ${T.verb}!` : `${T.name} · ระหว่างบินแตะจอเพื่อ${T.verb}`;
+    this.abilIcon.setTexture(`bird_${type}`).setScale(0.62 / TEX);
+    this.abilText.setText(label);
+    const tw = this.abilText.width, W = tw + 76, H = 50;
+    this.abilBg.clear(); glassPanel(this.abilBg, -W / 2, -H / 2, W, H, 25, 0.7);
+    this.abilIcon.setPosition(-W / 2 + 30, 0);
+    this.abilText.setPosition(-W / 2 + 56, 0);
+    this.abil.setVisible(true).setAlpha(1);
+    this.tweens.killTweensOf(this.abil);
+    if (phase === 'flying') this.tweens.add({ targets: this.abil, alpha: 0.55, duration: 380, yoyo: true, repeat: -1 });
+  }
+
+  showBanner() {
+    const gs = this.gs;
+    const b = this.add.container().setDepth(20);
+    b.add(txt(this, 0, -64, `ด่านที่ ${gs.levelIndex + 1}`, 66, '#ffd66b', { weight: 800, stroke: '#0b1d3a', st: 12, shadow: true }).setOrigin(0.5));
+    b.add(txt(this, 0, 8, gs.level.name, 42, '#ffffff', { weight: 600, stroke: '#0b1d3a', st: 9 }).setOrigin(0.5));
+    b.add(txt(this, 0, 62, `กำจัดหมูโจร ${gs.pigs.length} ตัว  ·  นก ${gs.level.birds.length} ตัว`, 24, '#e8f4ff', { weight: 600, stroke: '#0b1d3a', st: 6 }).setOrigin(0.5));
+    const n = gs.level.birds.length;
+    gs.level.birds.forEach((t, i) => b.add(img(this, (i - (n - 1) / 2) * 50, 112, `bird_${t}`).setScale(0.8 / TEX)));
+    this.banner = b;
+    this.layout();
+    b.setAlpha(0);
+    this.tweens.add({ targets: b, alpha: 1, duration: 300, yoyo: true, hold: 1500, onComplete: () => { b.destroy(); if (this.banner === b) this.banner = null; } });
+  }
+
+  showNewBird(type) {
+    const T = BIRD_TYPES[type];
+    if (this.newBird) this.newBird.destroy();
+    const c = this.add.container().setDepth(25);
+    const g = this.add.graphics(); glassPanel(g, -300, -72, 600, 144, 24, 0.82);
+    c.add(g);
+    const icon = img(this, -228, 0, `bird_${type}`).setScale(1.7 / TEX);
+    c.add(icon);
+    c.add(txt(this, -170, -30, `นกใหม่!  ${T.name}`, 32, '#ffd66b', { weight: 800 }).setOrigin(0, 0.5));
+    c.add(txt(this, -170, 18, T.info, 20, '#ffffff', { weight: 400, align: 'left', wordWrap: true }).setOrigin(0, 0.5).setWordWrapWidth(440));
+    this.newBird = c;
+    this.layout();
+    c.setAlpha(0);
+    this.tweens.add({ targets: c, alpha: 1, y: c.y + 10, duration: 350, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: icon, angle: { from: -10, to: 10 }, duration: 420, yoyo: true, repeat: 5 });
+    Sfx.play('newbird');
+    this.time.delayedCall(4200, () => { if (this.newBird === c) this.tweens.add({ targets: c, alpha: 0, duration: 300, onComplete: () => { c.destroy(); if (this.newBird === c) this.newBird = null; } }); });
+  }
+
+  // ───── ป๊อปอัปกลางจอ ─────
+  openModal(title, color, w = 660, h = 470) {
+    this.closeModal();
+    const overlay = this.add.rectangle(0, 0, 40000, 40000, 0x061430, 0.5).setInteractive().setDepth(50);
+    const box = this.add.container().setDepth(51);
+    const g = this.add.graphics(); glassPanel(g, -w / 2, -h / 2, w, h, 30, 0.9);
+    box.add(g);
+    if (title) box.add(txt(this, 0, -h / 2 + 58, title, 52, color, { weight: 800, stroke: '#061430', st: 10, shadow: true }).setOrigin(0.5));
+    this.modal = { overlay, box };
+    this.layout();
+    const s = box.scale;
+    box.setAlpha(0).setScale(s * 0.8);
+    this.tweens.add({ targets: box, alpha: 1, scale: s, duration: 320, ease: 'Back.easeOut' });
+    return box;
+  }
+  closeModal() {
+    if (!this.modal) return;
+    this.modal.overlay.destroy(); this.modal.box.destroy(); this.modal = null;
+  }
+  addClose(box, w, h, cb) {
+    const b = makeIconButton(this, w / 2 - 34, -h / 2 + 34, 'close', cb);
+    box.add(b);
+  }
+
+  togglePause() {
+    const gs = this.gs;
+    if (this.mode !== 'game' || gs.resultShown) return;
+    if (gs.paused) { this.closeModal(); gs.setPaused(false); return; }
+    gs.setPaused(true);
+    const box = this.openModal('หยุดชั่วคราว', '#ffd66b', 560, 420);
+    box.add(makeButton(this, 0, -30, 'เล่นต่อ', () => this.togglePause(), { w: 300, color: 0x2b8a3e }));
+    box.add(makeButton(this, 0, 60, 'เริ่มด่านนี้ใหม่', () => gs.restartLevel(), { w: 300, color: 0x31507e }));
+    box.add(makeButton(this, 0, 150, 'เลือกด่าน', () => gs.goMenu(true), { w: 300, color: 0x31507e }));
+  }
+
+  showResult(r) {
+    const gs = this.gs;
+    if (this.abil) this.abil.setVisible(false);
+    if (r.win) {
+      const box = this.openModal(r.last ? 'ชนะครบทุกด่าน!' : 'ผ่านด่าน!', '#ffd66b');
+      for (let i = 0; i < 3; i++) {
+        const g = this.add.graphics();
+        drawStar(g, 0, 0, 44, i < r.stars);
+        g.setPosition((i - 1) * 108, -76 + (i === 1 ? -12 : 0));
+        box.add(g);
+        if (i < r.stars) {
+          g.setScale(0);
+          this.tweens.add({ targets: g, scale: 1, duration: 380, delay: 300 + i * 280, ease: 'Back.easeOut', onStart: () => Sfx.play('bonus') });
+        }
+      }
+      const sc = txt(this, 0, 22, 'คะแนน 0', 34, '#ffffff', { weight: 800 }).setOrigin(0.5);
+      box.add(sc);
+      this.tweens.addCounter({ from: 0, to: r.score, duration: 900, delay: 250, onUpdate: (tw) => sc.setText('คะแนน ' + fmt(tw.getValue())) });
+      const bt = txt(this, 0, 68, r.isNew ? 'สถิติใหม่!' : `สถิติ ${fmt(r.best)}`, r.isNew ? 26 : 22, r.isNew ? '#ffd66b' : '#bcd6ff', { weight: r.isNew ? 800 : 400 }).setOrigin(0.5);
+      box.add(bt);
+      if (r.isNew) this.tweens.add({ targets: bt, scale: { from: 0.9, to: 1.1 }, duration: 500, yoyo: true, repeat: -1 });
+      box.add(makeButton(this, -210, 158, 'เลือกด่าน', () => gs.goMenu(true), { w: 180, color: 0x31507e, size: 23 }));
+      box.add(makeButton(this, 0, 158, 'เล่นซ้ำ', () => gs.restartLevel(), { w: 180, color: 0x31507e, size: 23 }));
+      if (r.last) box.add(makeButton(this, 210, 158, 'เมนูหลัก', () => gs.goMenu(false), { w: 180, color: 0x2b8a3e, size: 23 }));
+      else box.add(makeButton(this, 210, 158, 'ด่านถัดไป »', () => gs.nextLevel(), { w: 180, color: 0x2b8a3e, size: 23 }));
+    } else {
+      const box = this.openModal('หมูโจรยังเหลือ!', '#ff9a9a');
+      const smug = img(this, 0, -84, Tex.pig(this, 'normal', 'base')).setScale(1.4 / TEX);
+      box.add(smug);
+      this.tweens.add({ targets: smug, angle: { from: -9, to: 9 }, duration: 500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      box.add(txt(this, 0, 4, `เหลืออีก ${r.pigsLeft} ตัว · นกหมดแล้ว`, 30, '#ffffff', { weight: 600 }).setOrigin(0.5));
+      box.add(txt(this, 0, 52, `คะแนน ${fmt(r.score)}`, 24, '#cfe3ff').setOrigin(0.5));
+      box.add(makeButton(this, -120, 158, 'เลือกด่าน', () => gs.goMenu(true), { w: 200, color: 0x31507e, size: 23 }));
+      box.add(makeButton(this, 120, 158, 'ลองอีกครั้ง', () => gs.restartLevel(), { w: 220, color: 0xc0392b, size: 23 }));
+    }
+  }
+
+  // ───── เมนูหลัก ─────
+  buildMenu() {
+    const gs = this.gs;
+    this.menu = this.add.container();
+    const title = txt(this, 0, -200, 'ถล่มป้อมหมูโจร', 104, '#ffd66b', { weight: 800, stroke: '#0b1d3a', st: 18, shadow: true }).setOrigin(0.5);
+    this.menu.add(title);
+    this.tweens.add({ targets: title, y: -210, duration: 1600, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.menu.add(txt(this, 0, -112, 'เกมหนังสติ๊กยิงนก · ฟิสิกส์จริงด้วย Phaser 3 + Matter.js', 24, '#ffffff', { weight: 600, stroke: '#0b1d3a', st: 6 }).setOrigin(0.5));
+    const sg = this.add.graphics(); drawStar(sg, 0, 0, 17, true);
+    const stars = txt(this, 0, 0, `${Save.totalStars()} / ${LEVELS.length * 3}   ·   คะแนนรวม ${fmt(Save.totalScore())}`, 24, '#ffffff', { weight: 600, stroke: '#0b1d3a', st: 6 }).setOrigin(0, 0.5);
+    const rowW = 40 + stars.width;
+    sg.setPosition(-rowW / 2 + 17, -52); stars.setPosition(-rowW / 2 + 42, -52);
+    this.menu.add([sg, stars]);
+    const next = Save.nextLevel();
+    const label = Save.totalStars() ? `เล่นต่อ · ด่าน ${next + 1}` : 'เริ่มเล่น';
+    this.menu.add(makeButton(this, 0, 50, label, () => gs.playLevel(next), { w: 340, h: 82, size: 34, color: 0x2b8a3e }));
+    this.menu.add(makeButton(this, 0, 150, 'เลือกด่าน', () => this.showLevelSelect(), { w: 280, h: 66, size: 26, color: 0x31507e }));
+    this.trMenu = this.topRightButtons(['fs', 'sound']);
+    this.help = txt(this, 0, 0, 'F = เต็มจอ  ·  M = เปิด/ปิดเสียง  ·  Enter = เล่น', 17, '#ffffff', { stroke: '#0b1d3a', st: 4 }).setOrigin(0.5, 1).setAlpha(0.85);
+  }
+
+  showLevelSelect() {
+    const W = 800, Hh = 520;
+    const box = this.openModal('เลือกด่าน', '#ffd66b', W, Hh);
+    this.addClose(box, W, Hh, () => this.closeModal());
+    LEVELS.forEach((L, i) => {
+      const col = i % 5, row = Math.floor(i / 5);
+      const x = (col - 2) * 146, y = -52 + row * 168;
+      const locked = i >= Save.data.unlocked, best = Save.best(i);
+      const c = this.add.container(x, y);
+      const g = this.add.graphics();
+      g.fillStyle(0x000000, 0.2).fillRoundedRect(-60, -56, 120, 132, 18);
+      g.fillStyle(locked ? 0x22314f : 0x2b5aa0, 1).fillRoundedRect(-62, -62, 124, 132, 18);
+      g.fillStyle(0xffffff, locked ? 0.05 : 0.14).fillRoundedRect(-58, -58, 116, 48, { tl: 14, tr: 14, bl: 6, br: 6 });
+      g.lineStyle(3, locked ? 0x51607d : GOLD, 1).strokeRoundedRect(-62, -62, 124, 132, 18);
+      c.add(g);
+      if (locked) {
+        const lk = this.add.graphics();
+        lk.lineStyle(5, 0x8b9ab8, 1).beginPath(); lk.arc(0, -8, 12, Math.PI, 0); lk.strokePath();
+        lk.fillStyle(0x8b9ab8, 1).fillRoundedRect(-18, -8, 36, 28, 5);
+        lk.fillStyle(0x22314f, 1).fillCircle(0, 4, 4);
+        c.add(lk);
+      } else {
+        c.add(txt(this, 0, -16, String(i + 1), 50, '#ffffff', { weight: 800, stroke: '#0b1d3a', st: 6 }).setOrigin(0.5));
+        const sg = this.add.graphics();
+        for (let k = 0; k < 3; k++) drawStar(sg, (k - 1) * 30, 40, 12, k < best.stars);
+        c.add(sg);
+        const z = this.add.zone(0, 4, 124, 132).setInteractive({ useHandCursor: true });
+        z.on('pointerover', () => c.setScale(1.06));
+        z.on('pointerout', () => c.setScale(1));
+        z.on('pointerup', () => { Sfx.play('click'); this.gs.playLevel(i); });
+        c.add(z);
+      }
+      c.add(txt(this, 0, 92, L.name, 18, locked ? '#8b9ab8' : '#e8f4ff', { weight: 600 }).setOrigin(0.5));
+      box.add(c);
+    });
+  }
+}
+
+// ═══════════════════════════ เริ่มเกม ═══════════════════════════
+function start() {
+  Save.load();
+  const game = new Phaser.Game({
+    type: Phaser.AUTO,
+    parent: 'game',
+    width: Math.round(window.innerWidth * DPR),
+    height: Math.round(window.innerHeight * DPR),
+    transparent: true,
+    scale: { mode: Phaser.Scale.NONE, zoom: 1 / DPR },
+    render: { antialias: true, powerPreference: 'high-performance' },
+    input: { activePointers: 2 },
+    physics: {
+      default: 'matter',
+      matter: {
+        gravity: { y: 1 },
+        enableSleeping: true,       // ตึกที่นิ่งแล้วจะ "หลับ" → ไม่สั่น ไม่ไหลเอง
+        positionIterations: 10,
+        velocityIterations: 8,
+        autoUpdate: false,          // เดินฟิสิกส์เองแบบ fixed timestep
+        debug: false,
+      },
+    },
+    scene: [BootScene, TitleScene, GameScene, UIScene],
+  });
+  window.game = game;
+  const fit = () => game.scale.resize(Math.round(window.innerWidth * DPR), Math.round(window.innerHeight * DPR));
+  window.addEventListener('resize', fit);
+  window.addEventListener('orientationchange', () => setTimeout(fit, 300));
+  document.addEventListener('fullscreenchange', () => setTimeout(fit, 80));
+  document.addEventListener('webkitfullscreenchange', () => setTimeout(fit, 80));
+  window.addEventListener('keydown', (e) => { if ((e.key === 'f' || e.key === 'F') && !e.repeat) FS.toggle(); });
+}
+// รอฟอนต์ไทยโหลดก่อนวาดข้อความบน canvas — ออฟไลน์/ช้าเกิน 2.5 วิ ใช้ฟอนต์สำรอง
+const fontsReady = document.fonts
+  ? Promise.all(['400 20px Kanit', '600 20px Kanit', '800 20px Kanit'].map((f) => document.fonts.load(f, 'ทดสอบ')))
+  : Promise.resolve();
+Promise.race([fontsReady, new Promise((r) => setTimeout(r, 2500))]).catch(() => {}).then(start);
+})();
+</script>
+</body>
+</html>
