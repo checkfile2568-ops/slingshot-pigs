@@ -1,99 +1,70 @@
 <!doctype html>
 <html lang="th">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<meta name="theme-color" content="#2498df">
-<meta name="description" content="สนามเพื่อนซน เกมสีสดสำหรับเด็ก 3–4 ขวบ">
-<title>สนามเพื่อนซน · เกมเด็ก 3–4 ขวบ</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600;700;800&display=swap" rel="stylesheet">
-<style>
-:root{--ink:#12335e;--yellow:#ffd83d;--blue:#2498df;--pink:#ff5d87;--green:#60bd3a}
-*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#1578c3;font-family:Kanit,Tahoma,sans-serif;color:var(--ink);touch-action:none}
-button{font:inherit;border:0;cursor:pointer;-webkit-tap-highlight-color:transparent}.screen{position:fixed;inset:0}.hidden{display:none!important}
-#home{overflow:auto;background:linear-gradient(#2b9fe6 0%,#73d4fb 55%,#daf5ff 55%,#a9e57d 100%);padding:clamp(18px,4vw,44px) 16px 40px;text-align:center}
-.cloud{position:absolute;color:#fff;font-size:clamp(38px,8vw,100px);opacity:.85;animation:float 8s ease-in-out infinite}.cloud.one{left:7%;top:8%}.cloud.two{right:7%;top:18%;animation-delay:-3s}@keyframes float{50%{transform:translateY(-15px)}}
-.brand{position:relative;max-width:760px;margin:0 auto 20px;text-shadow:0 3px 0 #fff,0 6px 14px #2975a2}.brand .kicker{font-size:clamp(15px,2.5vw,22px);font-weight:700;color:#fff;text-shadow:0 2px 4px #166295}.brand h1{margin:0;color:#f03f68;font-size:clamp(42px,9vw,84px);line-height:1.05;font-weight:800}.brand p{font-size:clamp(16px,2.5vw,21px);margin:8px auto;max-width:550px}
-.game-grid{position:relative;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));max-width:1080px;margin:18px auto;gap:18px}.game-card{min-height:255px;border:5px solid #fff;border-radius:28px;padding:18px 16px;box-shadow:0 9px 0 rgba(18,51,94,.22),0 16px 32px rgba(18,51,94,.16);color:#fff;text-align:left;display:flex;flex-direction:column;justify-content:flex-end;transition:transform .18s}.game-card:hover{transform:translateY(-5px)}.game-card h2{margin:0;font-size:28px;text-shadow:0 3px 0 rgba(0,0,0,.2)}.game-card p{font-size:16px;margin:3px 0 10px;line-height:1.35}.game-card .emoji{font-size:82px;align-self:center;margin-bottom:auto;filter:drop-shadow(0 5px 0 rgba(0,0,0,.13))}.bubble-card{background:linear-gradient(145deg,#35c8ee,#3974df)}.punch-card{background:linear-gradient(145deg,#ff9f40,#f14d72)}.color-card{background:linear-gradient(145deg,#8c72ee,#e85ac5)}.legacy-card{background:linear-gradient(145deg,#72c54a,#1d9d72)}
-.play{width:100%;border-radius:15px;background:var(--yellow);box-shadow:0 4px 0 #da9c13;color:#693b00;font-weight:800;padding:10px 14px;font-size:18px}.top-actions{position:relative;display:flex;justify-content:center;gap:10px;margin:10px auto}.round{background:#fff;color:var(--ink);border-radius:99px;box-shadow:0 4px 0 rgba(18,51,94,.2);padding:8px 14px;font-weight:700}
-#gameScreen{background:#1d84d2}#gameCanvas{position:absolute;inset:0;width:100%;height:100%;display:block}.hud{position:absolute;top:max(12px,env(safe-area-inset-top));left:0;right:0;display:flex;justify-content:space-between;align-items:center;gap:8px;padding:0 12px;pointer-events:none}.hud>*{pointer-events:auto}.hud button,.hud .level-pill{background:rgba(255,255,255,.94);color:var(--ink);border:3px solid #fff;border-radius:16px;padding:8px 12px;box-shadow:0 4px 0 rgba(18,51,94,.3);font-weight:800}.hud .level-pill{background:#fef2b0}.help{position:absolute;bottom:max(15px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);width:max-content;max-width:92%;padding:9px 16px;border-radius:18px;background:rgba(18,51,94,.86);color:#fff;text-align:center;font-weight:600;font-size:15px;pointer-events:none}
-#win{position:absolute;z-index:5;inset:0;display:grid;place-items:center;background:rgba(13,51,94,.55);padding:20px}.win-card{width:min(390px,100%);padding:28px 22px;text-align:center;border:5px solid #fff;border-radius:30px;background:linear-gradient(#fff3a9,#ffd24d);box-shadow:0 10px 0 #ca8b0b}.win-card h2{margin:4px 0;font-size:34px;color:#e34356}.win-card p{margin:4px 0 18px;font-size:18px}.win-card .stars{font-size:46px}.win-card button{border-radius:15px;background:#56b84b;color:#fff;box-shadow:0 4px 0 #2e812a;padding:11px 18px;font-weight:800;font-size:18px;margin:4px}
-@media(max-width:520px){.game-card{min-height:205px;border-radius:23px}.game-card .emoji{font-size:62px}.game-card h2{font-size:23px}.game-card p{font-size:14px}.brand h1{font-size:48px}.hud button,.hud .level-pill{font-size:13px;padding:7px 9px}.help{font-size:13px;padding:8px 12px}}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#2c9de3">
+  <meta name="description" content="สนามเพื่อนซน เกมช่วยสัตว์และระบายสีสำหรับเด็กวัย 3–4 ขวบ">
+  <title>สนามเพื่อนซน · เกมสนุกสำหรับเด็ก</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<main id="home" class="screen">
-  <div class="cloud one">☁️</div><div class="cloud two">☁️</div>
-  <section class="brand"><div class="kicker">สำหรับหนูน้อยวัย 3–4 ขวบ</div><h1>สนามเพื่อนซน</h1><p>เกมสีสด กดง่าย ช่วยเพื่อนสัตว์ ไม่มีเลือด ไม่มีการบาดเจ็บ</p></section>
-  <section class="game-grid" aria-label="เลือกเกม">
-    <article class="game-card bubble-card"><div class="emoji">🫧🐣</div><h2>นักยิงฟองสบู่</h2><p>ลากแล้วยิงฟอง ช่วยเพื่อนสัตว์ออกจากกล่องนุ่ม ๆ · 3 ด่าน</p><button class="play" data-game="bubble">เล่นเกมนี้</button></article>
-    <article class="game-card punch-card"><div class="emoji">🥊🐻</div><h2>นวมเด้งดึ๋ง</h2><p>แตะให้ถุงมือนวมเด้งไปผลักกล่องโฟม · 3 ด่าน</p><button class="play" data-game="punch">เล่นเกมนี้</button></article>
-    <article class="game-card color-card"><div class="emoji">🖍️🦋</div><h2>ระบายสีสนุก</h2><p>เลือกสีแล้วแตะพื้นที่ว่าง ระบายง่าย ๆ · 3 ภาพ</p><button class="play" data-game="color">เล่นเกมนี้</button></article>
-    <article class="game-card legacy-card"><div class="emoji">🐦🐷</div><h2>ถล่มป้อมหมูโจร</h2><p>เกมหนังสติ๊กเดิม พร้อม 10 ด่าน</p><button class="play" id="legacy">เปิดเกมเดิม</button></article>
+  <main id="home" class="home">
+    <div class="home-inner">
+      <header class="home-header">
+        <div class="header-copy">
+          <div class="eyebrow"><span class="eyebrow-star">✦</span> เกมสำหรับวัย 3–4 ขวบ</div>
+          <h1>สนามเพื่อนซน<span>!</span></h1>
+          <p>เลือกเกมที่ชอบ แล้วออกผจญภัยกันเลย</p>
+        </div>
+        <div class="header-actions">
+          <button id="soundToggle" class="icon-action" type="button" aria-label="ปิดเสียง">🔊 <span>เสียง</span></button>
+          <button id="homeFullscreen" class="icon-action" type="button">⛶ <span>เต็มจอ</span></button>
+        </div>
+      </header>
+      <section class="games" aria-label="เลือกเกม">
+        <article class="game-card bubble">
+          <canvas class="card-art" id="art-bubble" width="480" height="300" aria-hidden="true"></canvas>
+          <div class="card-content"><span class="card-tag">เกมช่วยเพื่อน · 3 ด่าน</span><h2>ฟองสบู่กู้ภัย</h2><p>เล็งฟองใสให้โดนกรง แล้วพาเพื่อนกลับบ้าน</p><button class="card-play" type="button" data-game="bubble">เล่นฟองสบู่ <span aria-hidden="true">▶</span></button></div>
+        </article>
+        <article class="game-card punch">
+          <canvas class="card-art" id="art-punch" width="480" height="300" aria-hidden="true"></canvas>
+          <div class="card-content"><span class="card-tag">เกมเด้งดึ๋ง · 3 ด่าน</span><h2>นวมเด้งช่วยเพื่อน</h2><p>เล็งนวมนุ่ม ๆ ให้เด้งไปเปิดทาง</p><button class="card-play" type="button" data-game="punch">เล่นนวมเด้ง <span aria-hidden="true">▶</span></button></div>
+        </article>
+        <article class="game-card color">
+          <canvas class="card-art" id="art-color" width="480" height="300" aria-hidden="true"></canvas>
+          <div class="card-content"><span class="card-tag">ศิลปินตัวน้อย · 3 ภาพ</span><h2>โลกสีรุ้ง</h2><p>แตะเลือกสี แล้วแตะภาพให้สดใส</p><button class="card-play" type="button" data-game="color">ระบายสี <span aria-hidden="true">▶</span></button></div>
+        </article>
+        <article class="game-card slingshot">
+          <canvas class="card-art" id="art-slingshot" width="480" height="300" aria-hidden="true"></canvas>
+          <div class="card-content"><span class="card-tag">เกมหนังสติ๊กเดิม · 10 ด่าน</span><h2>ถล่มป้อมหมูโจร</h2><p>เล็งนกให้แม่น พังป้อมให้ล้ม</p><a class="card-play" href="slingshot.html">เล่นเกมเดิม <span aria-hidden="true">▶</span></a></div>
+        </article>
+      </section>
+    </div>
+  </main>
+  <section id="play" class="play-screen" hidden aria-label="พื้นที่เล่นเกม">
+    <canvas id="gameCanvas" aria-label="พื้นที่เกม"></canvas>
+    <header class="game-hud">
+      <button id="backToHome" class="hud-button" type="button">← เกมทั้งหมด</button>
+      <div class="game-title"><strong id="gameName">ฟองสบู่กู้ภัย</strong><span id="levelName">ด่าน 1 จาก 3</span></div>
+      <div class="game-actions"><button id="restartLevel" class="hud-button small" type="button" aria-label="เริ่มด่านใหม่">↻</button><button id="gameFullscreen" class="hud-button small" type="button" aria-label="เต็มจอ">⛶</button></div>
+    </header>
+    <div id="scorePanel" class="score-panel"><span id="scoreLabel">ช่วยเพื่อน</span><strong id="scoreValue">0 / 1</strong></div>
+    <div id="instruction" class="instruction">แตะจุดที่อยากยิงฟอง!</div>
+    <div id="palette" class="palette" hidden aria-label="เลือกสี"></div>
+    <div id="rotateTip" class="rotate-tip" hidden>📱 หมุนเครื่องแนวนอนจะเล่นได้เต็มจอ <button type="button" id="dismissRotate">ตกลง</button></div>
+    <div id="result" class="result" hidden>
+      <div class="result-card" role="dialog" aria-modal="true" aria-labelledby="resultTitle">
+        <div class="result-stars" aria-hidden="true">★ ★ ★</div>
+        <h2 id="resultTitle">ช่วยเพื่อนสำเร็จ!</h2>
+        <p id="resultText">เก่งมากเลย</p>
+        <div class="result-actions"><button type="button" id="replay">เล่นอีกครั้ง</button><button type="button" id="nextLevel" class="primary">ด่านถัดไป →</button></div>
+      </div>
+    </div>
   </section>
-  <div class="top-actions"><button class="round" id="homeFull">⛶ เต็มจอ</button><button class="round" id="soundButton">🔊 เสียง: เปิด</button></div>
-</main>
-<section id="gameScreen" class="screen hidden" aria-label="พื้นที่เล่นเกม">
-  <canvas id="gameCanvas"></canvas>
-  <div class="hud"><button id="back">← เกมทั้งหมด</button><div class="level-pill" id="levelLabel">ด่าน 1/3</div><button id="full">⛶ เต็มจอ</button></div>
-  <div class="help" id="help">ลากจากวงกลมฟอง แล้วปล่อยเพื่อยิง</div>
-  <div id="win" class="hidden"><div class="win-card"><div class="stars">⭐️⭐️⭐️</div><h2>ช่วยเพื่อนสำเร็จ!</h2><p>เก่งมากเลย</p><button id="again">เล่นอีกครั้ง</button><button id="next">ด่านถัดไป</button></div></div>
-</section>
-<script>
-(() => {
-  const W=1000,H=620,canvas=document.querySelector('#gameCanvas'),ctx=canvas.getContext('2d');
-  const home=document.querySelector('#home'),screen=document.querySelector('#gameScreen'),help=document.querySelector('#help'),label=document.querySelector('#levelLabel'),win=document.querySelector('#win');
-  let scale=1,ox=0,oy=0,dpr=1,game='',level=0,scene=null,drag=null,last=performance.now(),soundOn=true,audio=null;
-  const palette=['#ff5d87','#ffcc36','#4bc3f1','#63bf45','#9a78e8','#ff9443'];
-  const stages={
-    bubble:[
-      {name:'สวนฟองใส',animals:[[760,462,'🐣']],blocks:[[720,495,82,60],[810,495,82,60]]},
-      {name:'ก้อนเมฆกลม',animals:[[770,392,'🐰'],[860,462,'🐣']],blocks:[[720,495,82,60],[810,495,82,60],[770,425,130,46]]},
-      {name:'หอคอยนุ่มนิ่ม',animals:[[715,392,'🐶'],[850,325,'🐱']],blocks:[[690,495,85,60],[790,495,85,60],[710,425,55,60],[800,425,55,60],[755,355,130,45]]}
-    ],
-    punch:[
-      {name:'กล่องเด้ง 1',animals:[[780,462,'🐻']],blocks:[[730,495,100,60],[840,495,70,60]]},
-      {name:'กล่องเด้ง 2',animals:[[760,392,'🐵'],[870,462,'🐼']],blocks:[[720,495,95,60],[830,495,95,60],[770,425,150,45]]},
-      {name:'ป้อมหมอน',animals:[[720,392,'🐶'],[855,325,'🐱']],blocks:[[680,495,100,60],[800,495,100,60],[700,425,60,60],[820,425,60,60],[750,355,150,45]]}
-    ],
-    color:[
-      {name:'บ้านนกน้อย',kind:'house',zones:[['roof','#ff6b70'],['wall','#ffcf48'],['door','#6c8de5'],['sun','#ffd84a'],['grass','#6fc34c']]},
-      {name:'ผีเสื้อแสนสวย',kind:'butterfly',zones:[['left','#ff6c9b'],['right','#72c8ef'],['body','#613f93'],['sky','#8cdcf5'],['flower','#ffca3e']]},
-      {name:'รถผจญภัย',kind:'car',zones:[['car','#f0605c'],['wheel','#6b5b7a'],['window','#8bdcf5'],['road','#a9a4b2'],['tree','#5bbb58']]}
-    ]
-  };
-  function fit(){dpr=Math.min(devicePixelRatio||1,2);canvas.width=innerWidth*dpr;canvas.height=innerHeight*dpr;scale=Math.min(innerWidth/W,innerHeight/H);ox=(innerWidth-W*scale)/2;oy=(innerHeight-H*scale)/2}
-  addEventListener('resize',fit);fit();
-  function beep(type='pop'){if(!soundOn)return;try{audio??=new AudioContext();let o=audio.createOscillator(),g=audio.createGain();o.type=type==='win'?'triangle':'sine';o.frequency.value=type==='punch'?130:type==='win'?660:440;g.gain.setValueAtTime(.07,audio.currentTime);g.gain.exponentialRampToValueAtTime(.001,audio.currentTime+.16);o.connect(g).connect(audio.destination);o.start();o.stop(audio.currentTime+.16)}catch(e){}}
-  function xy(e){let r=canvas.getBoundingClientRect();return{x:(e.clientX-r.left-ox)/scale,y:(e.clientY-r.top-oy)/scale}}
-  function roundRect(x,y,w,h,r,fill,stroke){ctx.beginPath();ctx.roundRect(x,y,w,h,r);if(fill){ctx.fillStyle=fill;ctx.fill()}if(stroke){ctx.lineWidth=4;ctx.strokeStyle=stroke;ctx.stroke()}}
-  function text(t,x,y,size=24,color='#12335e',align='center'){ctx.font='800 '+size+'px Kanit';ctx.textAlign=align;ctx.textBaseline='middle';ctx.fillStyle=color;ctx.fillText(t,x,y)}
-  function sky(){let g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,'#2d9ee5');g.addColorStop(.62,'#b7eaff');g.addColorStop(.63,'#91d95d');g.addColorStop(1,'#5aa33d');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);ctx.fillStyle='#fff0a5';ctx.beginPath();ctx.arc(830,102,55,0,7);ctx.fill();for(let i=0;i<5;i++){ctx.fillStyle='rgba(255,255,255,.78)';ctx.beginPath();ctx.ellipse(100+i*190,120+(i%2)*55,62,20,0,0,7);ctx.fill()}ctx.fillStyle='#4e943b';ctx.fillRect(0,535,W,85);ctx.fillStyle='#75c34e';ctx.fillRect(0,535,W,9)}
-  function drawAnimal(a){if(a.saved){text(a.emoji,a.x,a.y,44);return}ctx.save();ctx.translate(a.x,a.y);ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(0,0,34,0,7);ctx.fill();ctx.lineWidth=4;ctx.strokeStyle='#48bfe5';ctx.stroke();text(a.emoji,0,2,35);ctx.restore()}
-  function drawBlock(b){roundRect(b.x-b.w/2,b.y-b.h/2,b.w,b.h,12,b.color||'#eaa64c','#9b6228');ctx.fillStyle='rgba(255,255,255,.25)';ctx.fillRect(b.x-b.w/2+8,b.y-b.h/2+8,b.w-16,7)}
-  function setup(){let st=stages[game][level];scene={projectiles:[],animals:st.animals?st.animals.map(([x,y,emoji])=>({x,y,emoji,saved:false,vy:0})):[],blocks:st.blocks?st.blocks.map(([x,y,w,h],i)=>({x,y,w,h,vx:0,vy:0,color:game==='punch'?(i%2?'#ffba57':'#ff8870'):'#dfa856'})):[],colors:{},done:false};label.textContent='ด่าน '+(level+1)+'/3';help.textContent=game==='bubble'?'ลากจากวงกลมฟอง แล้วปล่อยเพื่อยิง':game==='punch'?'แตะหน้าจอให้นวมเด้งไปช่วยเพื่อน':'เลือกสีด้านล่าง แล้วแตะพื้นที่ในภาพ';win.classList.add('hidden')}
-  function start(which){game=which;level=0;home.classList.add('hidden');screen.classList.remove('hidden');setup()}
-  document.querySelectorAll('[data-game]').forEach(b=>b.onclick=()=>start(b.dataset.game));
-  document.querySelector('#legacy').onclick=()=>location.href='slingshot.html';
-  document.querySelector('#back').onclick=()=>{screen.classList.add('hidden');home.classList.remove('hidden');game=''};
-  function toggleFull(){document.documentElement.requestFullscreen?.().catch(()=>{})}document.querySelector('#full').onclick=toggleFull;document.querySelector('#homeFull').onclick=toggleFull;
-  document.querySelector('#soundButton').onclick=()=>{soundOn=!soundOn;document.querySelector('#soundButton').textContent=soundOn?'🔊 เสียง: เปิด':'🔇 เสียง: ปิด'};
-  document.querySelector('#again').onclick=setup;document.querySelector('#next').onclick=()=>{level=(level+1)%3;setup()};
-  canvas.addEventListener('pointerdown',e=>{if(!game||scene.done)return;let p=xy(e);if(game==='bubble'){drag=p}else if(game==='punch'){launchPunch(p)}else if(!pickColor(p)){paint(p)}});canvas.addEventListener('pointermove',e=>{if(drag)drag.now=xy(e)});canvas.addEventListener('pointerup',e=>{if(drag){let p=xy(e),dx=drag.x-p.x,dy=drag.y-p.y;scene.projectiles.push({x:130,y:470,vx:Math.max(190,Math.min(600,dx*4)),vy:Math.max(-370,Math.min(200,dy*4)),r:25,kind:'bubble',life:4});beep('pop');drag=null}});
-  function launchPunch(p){let dx=p.x-130,dy=p.y-470,n=Math.hypot(dx,dy)||1;scene.projectiles.push({x:130,y:470,vx:dx/n*540,vy:dy/n*540,r:32,kind:'punch',life:3});beep('punch')}
-  function pickColor(p){let picked=palette.find((c,i)=>Math.hypot(p.x-(360+i*56),p.y-594)<30);if(!picked)return false;scene.selected=picked;beep('pop');return true}
-  function paint(p){let zones=colorZones(stages.color[level].kind);let z=zones.find(z=>p.x>z.x&&p.x<z.x+z.w&&p.y>z.y&&p.y<z.y+z.h);if(!z)return;scene.colors[z.id]=scene.selected||palette[0];beep('pop');if(Object.keys(scene.colors).length===zones.length)finish()}
-  function update(dt){if(!scene||game==='color')return;for(let b of scene.blocks){b.vy+=480*dt;b.x+=b.vx*dt;b.y+=b.vy*dt;b.vx*=.986;if(b.y+b.h/2>535){b.y=535-b.h/2;b.vy*=-.18;b.vx*=.78}}for(let a of scene.animals)if(a.saved){a.y-=22*dt;a.x+=Math.sin(performance.now()/220)*.3}for(let p of scene.projectiles){p.vy+=(game==='bubble'?360:480)*dt;p.x+=p.vx*dt;p.y+=p.vy*dt;p.life-=dt;if(p.y+p.r>535){p.y=535-p.r;p.vy*=-.48;p.vx*=.82}if(p.x-p.r<0||p.x+p.r>W)p.vx*=-.75;for(let b of scene.blocks){if(Math.abs(p.x-b.x)<p.r+b.w/2&&Math.abs(p.y-b.y)<p.r+b.h/2){b.vx+=p.vx*.07;b.vy+=p.vy*.05;p.vx*=-.45;p.vy*=-.4;beep('pop')}}for(let a of scene.animals){if(!a.saved&&Math.hypot(p.x-a.x,p.y-a.y)<p.r+34){a.saved=true;beep('win')}}}scene.projectiles=scene.projectiles.filter(p=>p.life>0&&p.y<H+100);if(!scene.done&&scene.animals.every(a=>a.saved))finish()}
-  function finish(){scene.done=true;beep('win');setTimeout(()=>win.classList.remove('hidden'),300)}
-  function bubbleHero(){ctx.save();ctx.translate(125,484);ctx.fillStyle='#3b74d8';ctx.beginPath();ctx.arc(0,0,38,0,7);ctx.fill();text('🦊',0,2,42);ctx.strokeStyle='#5f341d';ctx.lineWidth=8;ctx.beginPath();ctx.moveTo(-18,-5);ctx.lineTo(-4,-58);ctx.lineTo(12,-5);ctx.stroke();ctx.restore()}
-  function drawPlay(){sky();let st=stages[game][level];roundRect(300,36,400,52,20,'rgba(255,255,255,.88)','#fff');text(st.name,500,62,27,'#1c4f83');bubbleHero();scene.blocks.forEach(drawBlock);scene.animals.forEach(drawAnimal);for(let p of scene.projectiles){ctx.save();ctx.translate(p.x,p.y);if(p.kind==='bubble'){ctx.globalAlpha=.75;ctx.fillStyle='#b7f4ff';ctx.beginPath();ctx.arc(0,0,p.r,0,7);ctx.fill();ctx.lineWidth=4;ctx.strokeStyle='#fff';ctx.stroke();ctx.globalAlpha=1;text('🫧',0,1,40)}else{text('🥊',0,0,56)}ctx.restore()}if(drag){let q=drag.now||drag;ctx.setLineDash([10,10]);ctx.lineWidth=4;ctx.strokeStyle='#fff';ctx.beginPath();ctx.moveTo(130,470);ctx.lineTo(q.x,q.y);ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=.65;ctx.fillStyle='#c9f7ff';ctx.beginPath();ctx.arc(130,470,25,0,7);ctx.fill();ctx.globalAlpha=1}text('ช่วยเพื่อน '+scene.animals.filter(a=>a.saved).length+'/'+scene.animals.length,825,572,20,'#fff')}
-  function colorZones(kind){if(kind==='house')return[{id:'roof',x:345,y:205,w:315,h:118},{id:'wall',x:395,y:320,w:215,h:180},{id:'door',x:465,y:405,w:65,h:95},{id:'sun',x:110,y:110,w:105,h:105},{id:'grass',x:0,y:510,w:1000,h:110}];if(kind==='butterfly')return[{id:'left',x:300,y:225,w:195,h:235},{id:'right',x:505,y:225,w:195,h:235},{id:'body',x:475,y:205,w:55,h:275},{id:'sky',x:0,y:0,w:1000,h:200},{id:'flower',x:760,y:405,w:110,h:105}];return[{id:'car',x:315,y:335,w:360,h:120},{id:'wheel',x:365,y:430,w:260,h:80},{id:'window',x:420,y:355,w:160,h:65},{id:'road',x:0,y:510,w:1000,h:110},{id:'tree',x:750,y:255,w:125,h:255}]}
-  function zoneFill(id){return scene.colors[id]||'#fffdf1'}function outline(x,y,w,h,r=14){roundRect(x,y,w,h,r,'rgba(255,255,255,.86)','#2a5880')}
-  function drawColor(){sky();let st=stages.color[level];roundRect(300,36,400,52,20,'rgba(255,255,255,.9)','#fff');text(st.name,500,62,27,'#1c4f83');let z=colorZones(st.kind);if(st.kind==='house'){let q=z.find(x=>x.id==='grass');ctx.fillStyle=zoneFill(q.id);ctx.fillRect(q.x,q.y,q.w,q.h);ctx.beginPath();ctx.moveTo(345,323);ctx.lineTo(503,185);ctx.lineTo(660,323);ctx.closePath();ctx.fillStyle=zoneFill('roof');ctx.fill();ctx.strokeStyle='#2a5880';ctx.lineWidth=5;ctx.stroke();outline(395,320,215,180);ctx.fillStyle=zoneFill('wall');ctx.fillRect(399,324,207,172);outline(465,405,65,95);ctx.fillStyle=zoneFill('door');ctx.fillRect(469,409,57,87);ctx.fillStyle=zoneFill('sun');ctx.beginPath();ctx.arc(162,162,52,0,7);ctx.fill();ctx.stroke();text('☀️',162,160,72)}else if(st.kind==='butterfly'){ctx.fillStyle=zoneFill('sky');ctx.fillRect(0,0,1000,205);roundRect(300,225,195,235,90,zoneFill('left'),'#2a5880');roundRect(505,225,195,235,90,zoneFill('right'),'#2a5880');roundRect(475,205,55,275,28,zoneFill('body'),'#2a5880');ctx.fillStyle=zoneFill('flower');ctx.beginPath();ctx.arc(815,455,55,0,7);ctx.fill();ctx.stroke();text('🦋',500,342,120)}else{ctx.fillStyle=zoneFill('road');ctx.fillRect(0,510,1000,110);ctx.fillStyle=zoneFill('tree');ctx.fillRect(795,355,35,155);ctx.beginPath();ctx.arc(812,315,65,0,7);ctx.fill();ctx.stroke();roundRect(315,335,360,120,30,zoneFill('car'),'#2a5880');roundRect(420,355,160,65,12,zoneFill('window'),'#2a5880');ctx.fillStyle=zoneFill('wheel');ctx.beginPath();ctx.arc(400,455,40,0,7);ctx.arc(600,455,40,0,7);ctx.fill();ctx.stroke();text('🚗',500,412,110)}ctx.fillStyle='rgba(18,51,94,.86)';ctx.fillRect(0,545,1000,75);text('เลือกสี แล้วแตะภาพเพื่อระบาย',500,564,18,'#fff');palette.forEach((c,i)=>{ctx.fillStyle=c;ctx.beginPath();ctx.arc(360+i*56,594,22,0,7);ctx.fill();ctx.lineWidth=scene.selected===c?6:3;ctx.strokeStyle='#fff';ctx.stroke()})}
-  function frame(now){let dt=Math.min(.032,(now-last)/1000);last=now;ctx.setTransform(dpr*scale,0,0,dpr*scale,dpr*ox,dpr*oy);ctx.clearRect(-ox/scale,-oy/scale,innerWidth/scale,innerHeight/scale);if(game){if(game==='color')drawColor();else{update(dt);drawPlay()}}requestAnimationFrame(frame)}requestAnimationFrame(frame);
-})();
-</script>
+  <script src="games.js"></script>
 </body>
 </html>
