@@ -1,0 +1,610 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ff8fb8">
+<meta name="description" content="ABC ฟังแล้วทาย เกมฟังเสียงตัวอักษรภาษาอังกฤษ A–Z สำหรับเด็ก">
+<title>ABC ฟังแล้วทาย · เกมตัวอักษร A–Z</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   ABC ฟังแล้วทาย · ธีมสวนสนุก (ไฟล์เดียวจบ)
+   เสียงอ่าน: Web Speech API (en-US) · ดนตรี: Web Audio API
+   ============================================================ */
+:root{
+  --ink:#27305a; --pink:#ff7eb6; --pink-d:#d9467f; --purple:#8f6cf4; --purple-d:#5b3fc4;
+  --yellow:#ffd23f; --mint:#5fd4b5; --red:#ff5a5f; --green:#2dbe6c; --beat:.52s;
+  --emoji:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif;
+  font-family:Kanit,Tahoma,sans-serif; color:var(--ink); font-synthesis:none;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden}
+body{
+  background:
+    radial-gradient(circle at 10% 110%,rgba(146,227,169,.9) 0 26%,transparent 26.3%),
+    radial-gradient(circle at 90% 115%,rgba(120,214,160,.9) 0 30%,transparent 30.3%),
+    linear-gradient(180deg,#bfe8ff 0%,#e7dcff 50%,#ffe0ee 100%);
+  -webkit-user-select:none;user-select:none;overscroll-behavior:none;-webkit-touch-callout:none;
+}
+button,a{font:inherit;color:inherit;-webkit-tap-highlight-color:transparent}
+button{cursor:pointer}
+button:focus-visible,a:focus-visible{outline:4px solid #fff;outline-offset:3px}
+[hidden]{display:none!important}
+.bunting{position:fixed;left:0;right:0;top:0;height:32px;pointer-events:none;z-index:0;opacity:.9}
+.t-short{display:none}
+
+.app{position:relative;z-index:1;height:100vh;height:100dvh;display:flex;flex-direction:column;gap:12px;
+  padding:max(12px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left))}
+.topbar{display:flex;align-items:center;gap:10px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:48px;padding:6px 16px;border:3px solid #fff;border-radius:16px;background:#fff;color:var(--purple-d);font-weight:800;font-size:18px;box-shadow:0 6px 0 rgba(91,63,196,.22);text-decoration:none;white-space:nowrap;transition:transform .12s}
+.btn:active{transform:translateY(3px)}
+.btn.icon{width:52px;padding:0;font-size:22px}
+.btn.music{background:#fff6cf;color:#8a5a00;box-shadow:0 6px 0 #e3b53c}
+.btn.music[aria-pressed=true]{background:linear-gradient(160deg,#ff9ac6,#ff6fa8);color:#fff;box-shadow:0 6px 0 var(--pink-d)}
+.btn.music[aria-pressed=true] .note{display:inline-block;animation:bob var(--beat) ease-in-out infinite alternate}
+.title{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;text-align:center;line-height:1.1}
+.title strong{font-size:clamp(24px,3vw,38px);font-weight:800;color:#fff;-webkit-text-stroke:6px var(--pink-d);paint-order:stroke fill}
+.title > span{margin-top:4px;font-size:15px;font-weight:600;color:var(--pink-d);background:rgba(255,255,255,.8);border-radius:999px;padding:1px 12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.score{display:flex;align-items:center;gap:6px;min-height:48px;padding:4px 14px;border:3px solid #fff;border-radius:16px;background:#3b3f7a;color:#fff;font-weight:800;font-size:20px;box-shadow:0 6px 0 rgba(59,63,122,.35)}
+.score b{color:var(--yellow);font-size:24px;min-width:1.2em;text-align:center}
+.score.pop{animation:pop .5s}
+
+.main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(260px,36%) minmax(0,1fr);gap:14px}
+.stage{min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:12px;border:4px solid #fff;border-radius:28px;background:rgba(255,255,255,.62);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);box-shadow:0 8px 0 rgba(91,63,196,.18)}
+.info{display:flex;flex-direction:column;align-items:stretch;gap:10px;width:100%;min-width:0}
+.wheel-btn{position:relative;flex:none;display:flex;flex-direction:column;align-items:center;gap:4px;padding:0;border:0;background:none}
+.wheel-btn svg{display:block;width:clamp(120px,30vh,250px);height:auto;filter:drop-shadow(0 6px 0 rgba(91,63,196,.2))}
+.wheel-btn:active svg{transform:scale(.97)}
+.wheel-cap{margin-top:-6px;padding:6px 16px;border:3px solid #fff;border-radius:999px;background:var(--purple);color:#fff;font-weight:800;font-size:clamp(15px,1.6vw,19px);box-shadow:0 5px 0 var(--purple-d);white-space:nowrap}
+.wheel-btn.ask .wheel-cap{animation:nudge 1.4s ease-in-out infinite}
+.bubble{position:relative;padding:10px 16px;border:3px solid #fff;border-radius:20px;background:#fff;font-weight:600;font-size:clamp(15px,1.7vw,20px);line-height:1.35;text-align:center;box-shadow:0 5px 0 rgba(91,63,196,.16);min-height:2.9em;display:grid;place-items:center}
+.bubble.good{background:#e3ffe9;color:#16733a}
+.bubble.bad{background:#ffe6e6;color:#c02f35}
+.bubble.bad strong{font-size:1.2em}
+.card{display:flex;align-items:center;gap:14px;padding:10px 16px;border:3px solid #fff;border-radius:22px;background:linear-gradient(160deg,#fff7d6,#ffe5f1);box-shadow:0 5px 0 rgba(217,70,127,.18)}
+.card.flip{animation:flip .45s}
+.card-pic{flex:none;width:clamp(64px,9vh,96px);aspect-ratio:1;display:grid;place-items:center;border-radius:20px;background:#fff;font-family:var(--emoji);font-size:clamp(40px,6vh,64px);line-height:1}
+.card-pic svg{width:85%;height:auto}
+.card-text{min-width:0;display:flex;flex-direction:column;line-height:1.1}
+.card-letter{font-size:clamp(30px,5vh,48px);font-weight:800;color:var(--pink-d)}
+.card-word{font-size:clamp(20px,3vh,28px);font-weight:800;color:var(--purple-d)}
+.card-th{font-size:clamp(14px,2vh,17px);font-weight:600;color:#6b6f95}
+.next{width:100%;height:12px;border-radius:99px;background:rgba(91,63,196,.15);overflow:hidden}
+.next i{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,var(--mint),var(--green))}
+
+.keys-wrap{min-width:0;min-height:0;position:relative;padding:12px;border:4px solid #fff;border-radius:28px;background:rgba(255,255,255,.55);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);box-shadow:0 8px 0 rgba(91,63,196,.18);display:grid}
+.keys{display:grid;gap:10px;justify-content:center;align-content:center;--k:80px}
+.key{position:relative;display:grid;place-items:center;width:var(--k);height:var(--k);padding:0;border:3px solid #fff;border-radius:calc(var(--k) * .26);background:var(--bg);color:var(--ink);box-shadow:0 5px 0 var(--sh);font-weight:800;font-size:calc(var(--k) * .5);line-height:1;transition:background .2s,transform .12s}
+.key .low{position:absolute;right:calc(var(--k) * .1);bottom:calc(var(--k) * .06);font-size:calc(var(--k) * .22);font-weight:600;opacity:.7}
+.key:active{transform:translateY(3px) scale(.97);box-shadow:0 2px 0 var(--sh)}
+.key.wrong{background:var(--red);color:#fff;box-shadow:0 5px 0 #b3262b;animation:shake .45s}
+.key.right{background:var(--green);color:#fff;box-shadow:0 5px 0 #1b8747;animation:pop .6s}
+.key.hint{animation:glow 1s ease-in-out infinite}
+.key.sing{box-shadow:0 0 0 5px #fff,0 0 26px 10px #ffe066;z-index:2}
+body.dancing .key{animation:dance var(--beat) ease-in-out infinite alternate;animation-delay:calc(var(--i) * -.09s)}
+body.dancing .key.wrong{animation:shake .45s}
+body.dancing .key.right{animation:pop .6s}
+.locked .key{pointer-events:none}
+
+.notice{position:fixed;left:50%;top:max(12px,env(safe-area-inset-top));transform:translateX(-50%);z-index:30;width:min(560px,calc(100% - 24px));padding:10px 16px;border:3px solid #fff;border-radius:18px;background:#fff3c4;color:#6a4a00;font-weight:600;font-size:15px;text-align:center;box-shadow:0 6px 0 rgba(0,0,0,.12)}
+.notice button{margin-left:8px;border:0;border-radius:10px;background:#8a5a00;color:#fff;padding:3px 10px;font-weight:700}
+.confetti{position:fixed;left:0;top:0;width:12px;height:12px;border-radius:3px;pointer-events:none;z-index:40}
+
+@keyframes dance{0%{transform:translateY(2px) rotate(-4deg) scale(.98)}100%{transform:translateY(-8px) rotate(4deg) scale(1.03)}}
+@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px) rotate(-4deg)}40%{transform:translateX(8px) rotate(4deg)}60%{transform:translateX(-6px)}80%{transform:translateX(5px)}}
+@keyframes pop{0%{transform:scale(1)}40%{transform:scale(1.22)}100%{transform:scale(1)}}
+@keyframes glow{0%,100%{box-shadow:0 5px 0 var(--sh),0 0 0 0 rgba(255,210,63,.9)}50%{box-shadow:0 5px 0 var(--sh),0 0 0 10px rgba(255,210,63,.35)}}
+@keyframes nudge{0%,100%{transform:scale(1)}50%{transform:scale(1.07)}}
+@keyframes flip{0%{transform:rotateX(80deg);opacity:.2}100%{transform:none;opacity:1}}
+@keyframes bob{from{transform:translateY(1px) rotate(-10deg)}to{transform:translateY(-3px) rotate(10deg)}}
+
+/* ---------- จอแนวตั้ง ---------- */
+@media (orientation:portrait){
+  .main{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);gap:12px}
+  .stage{flex-direction:row;align-items:center;padding:10px}
+  .wheel-btn svg{width:clamp(110px,30vw,230px)}
+  .info{flex:1}
+}
+@media (max-width:640px){
+  .btn span:not(.note),.title > span{display:none}
+  .btn{min-height:44px;padding:4px 10px}
+  .btn.icon{width:44px}
+  .score{min-height:44px;padding:2px 10px;font-size:17px}.score b{font-size:20px}
+  .title strong{font-size:22px;-webkit-text-stroke-width:5px}
+  .bubble{font-size:14px;padding:8px 10px}
+  .card{padding:6px 10px;gap:10px}
+  .keys{gap:7px}
+}
+/* ---------- จอแนวนอนเตี้ย ---------- */
+@media (orientation:landscape) and (max-height:520px){
+  .app{gap:8px;padding-top:max(6px,env(safe-area-inset-top));padding-bottom:max(6px,env(safe-area-inset-bottom))}
+  .btn,.score{min-height:40px;font-size:15px;padding:3px 10px;border-width:2px}
+  .btn span:not(.note),.title > span{display:none}
+  .btn.icon{width:42px}
+  .bunting{height:22px}
+  .title strong{font-size:22px;-webkit-text-stroke-width:5px}
+  .main{grid-template-columns:minmax(220px,34%) minmax(0,1fr);gap:8px}
+  .stage{gap:6px;padding:6px;border-width:3px;border-radius:20px}
+  .wheel-btn svg{width:clamp(90px,28vh,150px)}
+  .wheel-cap{font-size:13px;padding:3px 10px}
+  .bubble{font-size:13px;padding:5px 8px;min-height:0}
+  .card{padding:4px 8px;gap:8px}
+  .card-pic{width:52px;font-size:34px;border-radius:14px}
+  .card-letter{font-size:24px}.card-word{font-size:17px}.card-th{font-size:12px}
+  .keys-wrap{padding:6px;border-width:3px;border-radius:20px}
+  .keys{gap:6px}
+}
+@media (max-width:480px){.t-long{display:none}.t-short{display:inline}}
+@media (prefers-reduced-motion:reduce){body.dancing .key{animation:none}.wheel-btn.ask .wheel-cap{animation:none}}
+</style>
+</head>
+<body>
+<svg class="bunting" viewBox="0 0 1200 46" preserveAspectRatio="xMidYMin slice" aria-hidden="true">
+  <path d="M0 6 Q600 34 1200 6" fill="none" stroke="#fff" stroke-width="3"/>
+  <g id="flags"></g>
+</svg>
+
+<div class="app">
+  <header class="topbar">
+    <a class="btn" href="index.html" aria-label="กลับหน้ารวมเกม">←<span> เกมทั้งหมด</span></a>
+    <div class="title"><strong><span class="t-long">ABC ฟังแล้วทาย</span><span class="t-short">ABC 🎡</span></strong><span>ฟังเสียงปริศนา แล้วกดตัวอักษรให้ถูก</span></div>
+    <div class="score" aria-live="polite" title="คะแนน">⭐ <b id="score">0</b></div>
+    <button type="button" class="btn music" id="musicBtn" aria-pressed="false" aria-label="เปิดเพลง ABC"><span class="note">🎵</span><span> เพลง ABC</span></button>
+    <button type="button" class="btn icon" id="fsBtn" aria-label="เต็มจอ">⛶</button>
+  </header>
+
+  <main class="main">
+    <section class="stage" aria-label="โจทย์">
+      <button type="button" class="wheel-btn ask" id="wheelBtn" aria-label="กดเพื่อฟังตัวอักษรปริศนา">
+        <svg viewBox="0 0 260 272" aria-hidden="true">
+          <path d="M130 132 L66 252 M130 132 L194 252" stroke="#8f6cf4" stroke-width="13" stroke-linecap="round" fill="none"/>
+          <path d="M92 214 L168 214" stroke="#8f6cf4" stroke-width="9" stroke-linecap="round"/>
+          <rect x="34" y="246" width="192" height="20" rx="10" fill="#ffb870" stroke="#fff" stroke-width="4"/>
+          <g id="wheelRot">
+            <circle cx="130" cy="130" r="102" fill="rgba(255,255,255,.55)" stroke="#ff7eb6" stroke-width="11"/>
+            <circle cx="130" cy="130" r="80" fill="none" stroke="#ffd23f" stroke-width="5" stroke-dasharray="7 9"/>
+            <g id="spokes" stroke="#8f6cf4" stroke-width="5" stroke-linecap="round"></g>
+            <g id="bulbs"></g>
+          </g>
+          <g id="cabins"></g>
+          <circle cx="130" cy="130" r="38" fill="#fff" stroke="#8f6cf4" stroke-width="8"/>
+          <text id="hubText" x="130" y="148" text-anchor="middle" font-family="Kanit,Tahoma,sans-serif" font-size="50" font-weight="800" fill="#d9467f">?</text>
+        </svg>
+        <span class="wheel-cap" id="wheelCap">▶ กดฟังโจทย์</span>
+      </button>
+      <div class="info">
+        <div class="bubble" id="status" aria-live="polite">กดชิงช้าสวรรค์ เพื่อฟังเสียงตัวอักษรปริศนา!</div>
+        <div class="card" id="card">
+          <div class="card-pic" id="cardPic">🎡</div>
+          <div class="card-text">
+            <div class="card-letter" id="cardLetter">A–Z</div>
+            <div class="card-word" id="cardWord">ABC</div>
+            <div class="card-th" id="cardTh">กดตัวอักษรเพื่อฟังเสียง</div>
+          </div>
+        </div>
+        <div class="next" id="next" hidden><i id="nextBar"></i></div>
+      </div>
+    </section>
+    <section class="keys-wrap" aria-label="แป้นตัวอักษร A ถึง Z">
+      <div class="keys" id="keys"></div>
+    </section>
+  </main>
+</div>
+
+<div class="notice" id="notice" hidden role="status"></div>
+
+<script>
+(() => {
+  'use strict';
+
+  /* ============================================================
+     1) ข้อมูลคำศัพท์ A–Z (Phonics)
+     ============================================================ */
+  const XYLO = '<svg viewBox="0 0 120 90" aria-hidden="true"><g transform="rotate(-10 60 45)"><rect x="8" y="30" width="104" height="8" rx="4" fill="#8a5a2b"/><rect x="8" y="62" width="104" height="8" rx="4" fill="#8a5a2b"/><rect x="12" y="14" width="13" height="72" rx="4" fill="#ff5a5f"/><rect x="29" y="18" width="13" height="64" rx="4" fill="#ff9f40"/><rect x="46" y="22" width="13" height="56" rx="4" fill="#ffd23f"/><rect x="63" y="26" width="13" height="48" rx="4" fill="#2dbe6c"/><rect x="80" y="30" width="13" height="40" rx="4" fill="#4da8ff"/><rect x="97" y="34" width="13" height="32" rx="4" fill="#9b5de5"/></g><path d="M20 84 L58 60" stroke="#6b4a2b" stroke-width="4" stroke-linecap="round"/><circle cx="60" cy="58" r="7" fill="#ff7eb6"/></svg>';
+  const WORDS = {
+    A: ['Apple', '🍎', 'แอปเปิล'], B: ['Banana', '🍌', 'กล้วย'], C: ['Cat', '🐱', 'แมว'], D: ['Dog', '🐶', 'สุนัข'],
+    E: ['Elephant', '🐘', 'ช้าง'], F: ['Fish', '🐟', 'ปลา'], G: ['Grapes', '🍇', 'องุ่น'], H: ['Hat', '🎩', 'หมวก'],
+    I: ['Ice cream', '🍦', 'ไอศกรีม'], J: ['Juice', '🧃', 'น้ำผลไม้'], K: ['Kite', '🪁', 'ว่าว'], L: ['Lion', '🦁', 'สิงโต'],
+    M: ['Monkey', '🐵', 'ลิง'], N: ['Nose', '👃', 'จมูก'], O: ['Orange', '🍊', 'ส้ม'], P: ['Pig', '🐷', 'หมู'],
+    Q: ['Queen', '👸', 'ราชินี'], R: ['Rabbit', '🐰', 'กระต่าย'], S: ['Sun', '☀️', 'ดวงอาทิตย์'], T: ['Tree', '🌳', 'ต้นไม้'],
+    U: ['Umbrella', '☂️', 'ร่ม'], V: ['Violin', '🎻', 'ไวโอลิน'], W: ['Whale', '🐳', 'ปลาวาฬ'], X: ['Xylophone', XYLO, 'ระนาดฝรั่ง'],
+    Y: ['Yo-yo', '🪀', 'โยโย่'], Z: ['Zebra', '🦓', 'ม้าลาย']
+  };
+  const LETTERS = Object.keys(WORDS);
+  const KEY_COLORS = [['#ffadc6', '#e57fa2'], ['#ffc48a', '#e0975a'], ['#ffe27a', '#d9b43f'], ['#bdeb8f', '#86bf57'], ['#8fe3d3', '#4fb5a3'], ['#9fd4ff', '#5d9fdc'], ['#c9b8ff', '#9580dc'], ['#f5b6ff', '#c97fd9']];
+  const SOUND_KEY = 'playground-sound', BEST_KEY = 'abc-quiz-best';
+  const $ = id => document.getElementById(id);
+
+  /* ============================================================
+     2) เสียงอ่านภาษาอังกฤษ (Web Speech API)
+     ============================================================ */
+  const Voice = {
+    ok: 'speechSynthesis' in window && typeof window.SpeechSynthesisUtterance === 'function',
+    voice: null, live: [],
+    pick() {
+      if (!this.ok) return;
+      const all = speechSynthesis.getVoices();
+      if (!all.length) return;
+      const us = all.filter(v => /^en[-_]US/i.test(v.lang));
+      const pref = ['Google US English', 'Samantha', 'Aria', 'Jenny', 'Ava', 'Allison', 'Zira'];
+      this.voice = pref.map(n => us.find(v => v.name.includes(n))).find(Boolean) || us.find(v => v.localService) || us[0] || all.find(v => /^en/i.test(v.lang)) || null;
+    },
+    hasEnglish() { return this.ok && speechSynthesis.getVoices().some(v => /^en/i.test(v.lang)); },
+    // คืนค่า Promise ที่จบเมื่ออ่านเสร็จ (มีเวลาสำรองกันเบราว์เซอร์ไม่ส่ง onend)
+    say(text, { queue = false, rate = 0.85, pitch = 1.15 } = {}) {
+      return new Promise(resolve => {
+        if (!this.ok) { setTimeout(resolve, 600); return; }
+        if (!queue) { speechSynthesis.cancel(); }
+        if (speechSynthesis.paused) speechSynthesis.resume();
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = 'en-US'; if (this.voice) u.voice = this.voice;
+        u.rate = rate; u.pitch = pitch; u.volume = 1;
+        let done = false;
+        const finish = () => {
+          if (done) return; done = true; clearTimeout(timer);
+          this.live = this.live.filter(x => x !== u);
+          if (!speechSynthesis.speaking && !speechSynthesis.pending) Music.duck(false);
+          resolve();
+        };
+        const timer = setTimeout(finish, 1800 + text.length * 140);
+        u.onend = finish; u.onerror = finish;
+        this.live.push(u);
+        Music.duck(true);
+        speechSynthesis.speak(u);
+      });
+    }
+  };
+  if (Voice.ok) {
+    Voice.pick();
+    speechSynthesis.addEventListener ? speechSynthesis.addEventListener('voiceschanged', () => Voice.pick()) : (speechSynthesis.onvoiceschanged = () => Voice.pick());
+  }
+
+  /* ============================================================
+     3) ดนตรีเพลง ABC แบบกล่องดนตรีสวนสนุก (Web Audio API)
+     ============================================================ */
+  const HZ = { C3: 130.81, F3: 174.61, G3: 196.0, B3: 246.94, C4: 261.63, D4: 293.66, E4: 329.63, F4: 349.23, G4: 392.0, A4: 440.0, B4: 493.88, C5: 523.25, D5: 587.33, E5: 659.25, F5: 698.46, G5: 783.99, A5: 880.0 };
+  // [โน้ต, จำนวนจังหวะ, ตัวอักษรที่ร้อง]
+  const SONG = [
+    ['C5', 1, 'A'], ['C5', 1, 'B'], ['G5', 1, 'C'], ['G5', 1, 'D'], ['A5', 1, 'E'], ['A5', 1, 'F'], ['G5', 2, 'G'],
+    ['F5', 1, 'H'], ['F5', 1, 'I'], ['E5', 1, 'J'], ['E5', 1, 'K'], ['D5', 0.5, 'L'], ['D5', 0.5, 'M'], ['D5', 0.5, 'N'], ['D5', 0.5, 'O'], ['C5', 2, 'P'],
+    ['G5', 1, 'Q'], ['G5', 1, 'R'], ['F5', 2, 'S'], ['E5', 1, 'T'], ['E5', 1, 'U'], ['D5', 2, 'V'],
+    ['G5', 1, 'W'], ['G5', 1, 'W'], ['F5', 1, 'W'], ['F5', 1, 'X'], ['E5', 1, 'Y'], ['E5', 1, ''], ['D5', 2, 'Z'],
+    ['C5', 1], ['C5', 1], ['G5', 1], ['G5', 1], ['A5', 1], ['A5', 1], ['G5', 2],
+    ['F5', 1], ['F5', 1], ['E5', 1], ['E5', 1], ['D5', 1], ['D5', 1], ['C5', 2]
+  ];
+  const CHORD = { C: ['C3', ['E4', 'G4', 'C5']], F: ['F3', ['F4', 'A4', 'C5']], G: ['G3', ['D4', 'G4', 'B4']] };
+  const HARMONY = 'CCFC FCGC CFCG CFCG CCFC FCGC'.replace(/ /g, '').split('');   // ทีละ 2 จังหวะ
+
+  const Music = {
+    ctx: null, master: null, on: false, timer: 0, beat: 60 / 116, t: 0, i: 0, ht: 0, hi: 0, pending: [], level: 0.28,
+    ensure() {
+      if (this.ctx) return this.ctx;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      this.ctx = new AC();
+      this.master = this.ctx.createGain(); this.master.gain.value = this.level;
+      this.master.connect(this.ctx.destination);
+      return this.ctx;
+    },
+    note(freq, when, dur, vol, type = 'sine') {
+      const c = this.ctx, o = c.createOscillator(), g = c.createGain();
+      o.type = type; o.frequency.setValueAtTime(freq, when);
+      g.gain.setValueAtTime(0.0001, when);
+      g.gain.exponentialRampToValueAtTime(vol, when + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+      o.connect(g); g.connect(this.master); o.start(when); o.stop(when + dur + 0.05);
+    },
+    start() {
+      const c = this.ensure(); if (!c) return false;
+      if (c.state === 'suspended') c.resume();
+      this.on = true; this.i = 0; this.hi = 0;
+      this.t = this.ht = c.currentTime + 0.1;
+      document.documentElement.style.setProperty('--beat', this.beat.toFixed(3) + 's');
+      document.body.classList.add('dancing');
+      this.tick(); this.timer = setInterval(() => this.tick(), 25);
+      return true;
+    },
+    stop() {
+      this.on = false; clearInterval(this.timer);
+      this.pending.forEach(clearTimeout); this.pending = [];
+      document.body.classList.remove('dancing');
+      document.querySelectorAll('.key.sing').forEach(k => k.classList.remove('sing'));
+    },
+    tick() {
+      const c = this.ctx, ahead = c.currentTime + 0.15;
+      while (this.t < ahead) {
+        const [n, beats, letter] = SONG[this.i], dur = beats * this.beat;
+        this.note(HZ[n], this.t, Math.max(0.35, dur * 1.1), 0.3, 'sine');
+        this.note(HZ[n] * 2, this.t, 0.28, 0.07, 'triangle');
+        if (letter) {
+          const wait = Math.max(0, (this.t - c.currentTime) * 1000), hold = dur * 1000 * 0.9;
+          const id = setTimeout(() => sing(letter, hold), wait);
+          this.pending.push(id); if (this.pending.length > 40) this.pending.shift();
+        }
+        this.t += dur; this.i = (this.i + 1) % SONG.length;
+      }
+      while (this.ht < ahead) {
+        const [bass, chord] = CHORD[HARMONY[this.hi]];
+        this.note(HZ[bass], this.ht, this.beat * 0.9, 0.22, 'triangle');
+        chord.forEach(n => this.note(HZ[n], this.ht + this.beat, this.beat * 0.6, 0.045, 'triangle'));
+        this.ht += this.beat * 2; this.hi = (this.hi + 1) % HARMONY.length;
+      }
+    },
+    duck(down) {
+      if (!this.master) return;
+      const g = this.master.gain, t = this.ctx.currentTime;
+      g.cancelScheduledValues(t); g.setValueAtTime(g.value, t);
+      g.linearRampToValueAtTime(down ? this.level * 0.3 : this.level, t + 0.15);
+    }
+  };
+
+  /* ----- เสียงเอฟเฟกต์สั้น ๆ ----- */
+  const Sfx = {
+    on: (() => { try { return localStorage.getItem(SOUND_KEY) !== '0'; } catch (_) { return true; } })(),
+    play(freqs, type = 'triangle', vol = 0.12, step = 0.09, dur = 0.16) {
+      if (!this.on) return;
+      const c = Music.ensure(); if (!c) return;
+      if (c.state === 'suspended') c.resume();
+      freqs.forEach((f, i) => {
+        const t = c.currentTime + i * step, o = c.createOscillator(), g = c.createGain();
+        o.type = type; o.frequency.setValueAtTime(f, t);
+        g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        o.connect(g); g.connect(c.destination); o.start(t); o.stop(t + dur + 0.02);
+      });
+    },
+    ding() { this.play([784, 988, 1319]); },
+    boop() { this.play([330, 247], 'sine', 0.14, 0.12, 0.2); },
+    tap() { this.play([660], 'sine', 0.05, 0, 0.06); }
+  };
+
+  /* ============================================================
+     4) ชิงช้าสวรรค์ (SVG หมุนด้วย requestAnimationFrame)
+     ============================================================ */
+  const NS = 'http://www.w3.org/2000/svg';
+  const CABIN_COLORS = ['#ff7eb6', '#ffd23f', '#5fd4b5', '#8f6cf4', '#ff9f40', '#4da8ff', '#a6e05a', '#f5b6ff'];
+  const cabins = [];
+  (function buildWheel() {
+    const spokes = $('spokes'), bulbs = $('bulbs'), cab = $('cabins');
+    for (let i = 0; i < 8; i++) {
+      const a = i * Math.PI / 4, l = document.createElementNS(NS, 'line');
+      l.setAttribute('x1', 130); l.setAttribute('y1', 130);
+      l.setAttribute('x2', 130 + Math.cos(a) * 100); l.setAttribute('y2', 130 + Math.sin(a) * 100);
+      spokes.appendChild(l);
+    }
+    for (let i = 0; i < 16; i++) {
+      const a = i * Math.PI / 8, c = document.createElementNS(NS, 'circle');
+      c.setAttribute('cx', 130 + Math.cos(a) * 102); c.setAttribute('cy', 130 + Math.sin(a) * 102);
+      c.setAttribute('r', 4); c.setAttribute('fill', i % 2 ? '#fff6a8' : '#ffffff');
+      bulbs.appendChild(c);
+    }
+    for (let i = 0; i < 8; i++) {
+      const g = document.createElementNS(NS, 'g');
+      g.innerHTML = `<line x1="0" y1="0" x2="0" y2="9" stroke="#5b3fc4" stroke-width="3"/><rect x="-14" y="8" width="28" height="22" rx="7" fill="${CABIN_COLORS[i]}" stroke="#fff" stroke-width="3"/><rect x="-8" y="12" width="16" height="7" rx="3" fill="#fff" opacity=".85"/>`;
+      cab.appendChild(g); cabins.push(g);
+    }
+  })();
+  let angle = 0, speed = 14, lastT = performance.now();
+  function spinWheel(now) {
+    const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+    speed += ((Music.on ? 40 : 14) - speed) * Math.min(1, dt * 1.6);
+    angle = (angle + speed * dt) % 360;
+    $('wheelRot').setAttribute('transform', `rotate(${angle.toFixed(2)} 130 130)`);
+    cabins.forEach((g, i) => {
+      const a = (angle + i * 45) * Math.PI / 180;
+      g.setAttribute('transform', `translate(${(130 + Math.cos(a) * 102).toFixed(1)} ${(130 + Math.sin(a) * 102).toFixed(1)})`);
+    });
+    requestAnimationFrame(spinWheel);
+  }
+  requestAnimationFrame(spinWheel);
+  const whirl = () => { speed = 240; };
+
+  /* ============================================================
+     5) แป้นตัวอักษร A–Z + จัดขนาดให้พอดีจอ
+     ============================================================ */
+  const keysEl = $('keys'), keyMap = {};
+  LETTERS.forEach((L, i) => {
+    const b = document.createElement('button');
+    const [bg, sh] = KEY_COLORS[i % KEY_COLORS.length];
+    b.type = 'button'; b.className = 'key'; b.dataset.letter = L;
+    b.style.setProperty('--bg', bg); b.style.setProperty('--sh', sh); b.style.setProperty('--i', i);
+    b.setAttribute('aria-label', `ตัว ${L}`);
+    b.innerHTML = `<span>${L}</span><span class="low" aria-hidden="true">${L.toLowerCase()}</span>`;
+    b.addEventListener('click', () => pressKey(L));
+    keysEl.appendChild(b); keyMap[L] = b;
+  });
+  function fitKeys() {
+    const wrap = keysEl.parentElement, cs = getComputedStyle(wrap);
+    const w = wrap.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const h = wrap.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    const gap = parseFloat(getComputedStyle(keysEl).columnGap) || 8;
+    let best = { size: 0, cols: 7 };
+    for (let cols = 4; cols <= 13; cols++) {
+      const rows = Math.ceil(26 / cols);
+      const size = Math.min((w - gap * (cols - 1)) / cols, (h - gap * (rows - 1) - 8) / rows);
+      if (size > best.size) best = { size, cols };
+    }
+    const k = Math.max(34, Math.floor(Math.min(best.size, 140)));
+    keysEl.style.gridTemplateColumns = `repeat(${best.cols}, ${k}px)`;
+    keysEl.style.gridAutoRows = `${k}px`;
+    keysEl.style.setProperty('--k', k + 'px');
+  }
+  if (window.ResizeObserver) new ResizeObserver(fitKeys).observe(keysEl.parentElement);
+  window.addEventListener('resize', fitKeys);
+
+  /* ============================================================
+     6) กติกาเกม
+     ============================================================ */
+  const G = { target: null, last: null, bag: [], score: 0, wrongs: 0, locked: false, hintMode: false };
+  try { G.best = +localStorage.getItem(BEST_KEY) || 0; } catch (_) { G.best = 0; }
+  const statusEl = $('status'), wheelBtn = $('wheelBtn');
+
+  function setStatus(html, tone = '') { statusEl.innerHTML = html; statusEl.className = 'bubble' + (tone ? ' ' + tone : ''); }
+  function showCard(L) {
+    const [word, pic, th] = WORDS[L];
+    const cardPic = $('cardPic');
+    if (pic.startsWith('<svg')) cardPic.innerHTML = pic; else cardPic.textContent = pic;
+    $('cardLetter').textContent = `${L}${L.toLowerCase()}`;
+    $('cardWord').textContent = word;
+    $('cardTh').textContent = th;
+    const card = $('card'); card.classList.remove('flip'); void card.offsetWidth; card.classList.add('flip');
+  }
+  function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+  function drawLetter() {
+    if (!G.bag.length) G.bag = shuffle(LETTERS);
+    let L = G.bag.pop();
+    if (L === G.last && G.bag.length) { G.bag.unshift(L); L = G.bag.pop(); }
+    return (G.last = L);
+  }
+  function clearKeys() { Object.values(keyMap).forEach(k => k.classList.remove('wrong', 'right', 'hint')); }
+  function setLocked(v) { G.locked = v; document.body.classList.toggle('locked', v); }
+
+  function ask() {
+    clearKeys(); setLocked(false);
+    G.target = drawLetter(); G.wrongs = 0;
+    $('next').hidden = true;
+    wheelBtn.classList.remove('ask');
+    $('wheelCap').textContent = '🔁 ฟังอีกครั้ง';
+    $('hubText').textContent = G.hintMode ? G.target : '?';
+    setStatus(G.hintMode ? '👀 หาตัวอักษรบนชิงช้าสวรรค์ให้เจอนะ!' : '👂 ฟังให้ดีนะ… เสียงนี้คือตัวอะไรเอ่ย?');
+    whirl();
+    speakTarget();
+  }
+  function speakTarget() { if (G.target) Voice.say(G.target, { rate: 0.8 }); }
+
+  function pressKey(L) {
+    if (G.locked) return;
+    Sfx.tap();
+    if (!G.target) {                                    // ยังไม่เริ่มโจทย์: กดเล่นฟังเสียงได้อิสระ
+      Voice.say(L, { rate: 0.8 });
+      showCard(L);
+      keyMap[L].classList.remove('right'); void keyMap[L].offsetWidth;
+      return;
+    }
+    if (L === G.target) correct(L); else wrong(L);
+  }
+
+  function correct(L) {
+    setLocked(true);
+    G.score++;
+    $('score').textContent = G.score;
+    const sc = document.querySelector('.score'); sc.classList.remove('pop'); void sc.offsetWidth; sc.classList.add('pop');
+    if (G.score > G.best) { G.best = G.score; try { localStorage.setItem(BEST_KEY, String(G.best)); } catch (_) {} }
+    keyMap[L].classList.remove('wrong', 'hint'); keyMap[L].classList.add('right');
+    $('hubText').textContent = L;
+    const [word] = WORDS[L];
+    showCard(L);
+    setStatus(`🎉 <strong>Correct!</strong> ${L} is for ${word}`, 'good');
+    Sfx.ding(); confetti(keyMap[L]); whirl();
+    const spoken = Voice.say(L, { rate: 0.8 }).then(() => null);
+    const phrase = Voice.say(`Correct! ${L} is for ${word}.`, { queue: true, rate: 0.85 });
+    // เปลี่ยนข้ออัตโนมัติใน 2 วินาที (ถ้ายังพูดไม่จบ จะรอให้พูดจบก่อนเพื่อไม่ตัดเสียง)
+    const bar = $('nextBar'); $('next').hidden = false;
+    if (bar.animate) bar.animate([{ width: '0%' }, { width: '100%' }], { duration: 2000, fill: 'forwards' });
+    else bar.style.width = '100%';
+    Promise.all([spoken, phrase, new Promise(r => setTimeout(r, 2000))]).then(() => { if (G.locked) ask(); });
+  }
+
+  function wrong(L) {
+    G.wrongs++;
+    const k = keyMap[L];
+    k.classList.remove('wrong'); void k.offsetWidth; k.classList.add('wrong');
+    Sfx.boop();
+    Voice.say(L, { rate: 0.8 });
+    Voice.say('Try again!', { queue: true });
+    let msg = '<strong>Try Again!</strong> ยังไม่ใช่ ลองใหม่นะ 💪<br>กด 🔁 ฟังอีกครั้ง ได้เลย';
+    if (G.wrongs >= 3) { keyMap[G.target].classList.add('hint'); msg = '<strong>Try Again!</strong> ดูปุ่มที่กระพริบสิ ✨'; }
+    setStatus(msg, 'bad');
+  }
+
+  function sing(L, hold) {
+    const k = keyMap[L]; if (!k || !Music.on) return;
+    k.classList.add('sing');
+    setTimeout(() => k.classList.remove('sing'), hold);
+  }
+
+  function confetti(from) {
+    const r = from.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const colors = ['#ff7eb6', '#ffd23f', '#5fd4b5', '#8f6cf4', '#ff9f40', '#4da8ff'];
+    for (let i = 0; i < 26; i++) {
+      const p = document.createElement('i');
+      p.className = 'confetti';
+      p.style.background = colors[i % colors.length];
+      document.body.appendChild(p);
+      const a = Math.random() * Math.PI * 2, d = 60 + Math.random() * 120;
+      const dx = Math.cos(a) * d, dy = Math.sin(a) * d - 60;
+      if (p.animate) {
+        p.animate([
+          { transform: `translate(${cx}px, ${cy}px) rotate(0deg)`, opacity: 1 },
+          { transform: `translate(${cx + dx}px, ${cy + dy + 140}px) rotate(${Math.random() * 720}deg)`, opacity: 0 }
+        ], { duration: 900 + Math.random() * 500, easing: 'cubic-bezier(.2,.7,.4,1)' }).onfinish = () => p.remove();
+      } else setTimeout(() => p.remove(), 50);
+    }
+  }
+
+  /* ============================================================
+     7) ปุ่มต่าง ๆ
+     ============================================================ */
+  wheelBtn.addEventListener('click', () => {
+    if (G.locked) return;
+    if (!G.target) ask(); else { speakTarget(); whirl(); }
+  });
+
+  const musicBtn = $('musicBtn');
+  function setMusic(on) {
+    if (on && !Music.start()) return;
+    if (!on) Music.stop();
+    musicBtn.setAttribute('aria-pressed', String(on));
+    musicBtn.setAttribute('aria-label', on ? 'ปิดเพลง ABC' : 'เปิดเพลง ABC');
+  }
+  musicBtn.addEventListener('click', () => setMusic(!Music.on));
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') { if (Music.on) setMusic(false); if (Voice.ok) speechSynthesis.cancel(); }
+  });
+
+  window.addEventListener('keydown', e => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const L = e.key.toUpperCase();
+    if (/^[A-Z]$/.test(L)) { pressKey(L); keyMap[L].focus({ preventScroll: true }); }
+    else if (e.key === ' ' || e.key === 'Enter') { if (document.activeElement === document.body) { e.preventDefault(); wheelBtn.click(); } }
+  });
+
+  const fsBtn = $('fsBtn'), root = document.documentElement;
+  if (!(root.requestFullscreen || root.webkitRequestFullscreen)) fsBtn.hidden = true;
+  fsBtn.addEventListener('click', () => {
+    const inFs = document.fullscreenElement || document.webkitFullscreenElement;
+    if (inFs) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    else { const r = (root.requestFullscreen || root.webkitRequestFullscreen).call(root); if (r && r.catch) r.catch(() => {}); }
+  });
+
+  // ธงประดับด้านบน
+  (function flags() {
+    const g = $('flags'), cols = ['#ff7eb6', '#ffd23f', '#5fd4b5', '#8f6cf4', '#ff9f40', '#4da8ff'];
+    for (let i = 0; i < 24; i++) {
+      const x = 25 + i * 50, t = x / 1200, y = 6 + 28 * 4 * t * (1 - t) * 0.5 + 1;
+      const p = document.createElementNS(NS, 'path');
+      p.setAttribute('d', `M${x - 16} ${y} L${x + 16} ${y} L${x} ${y + 24} Z`);
+      p.setAttribute('fill', cols[i % cols.length]);
+      g.appendChild(p);
+    }
+  })();
+
+  // ถ้าอุปกรณ์ไม่มีเสียงอ่านภาษาอังกฤษ ให้แสดงตัวอักษรบนชิงช้าสวรรค์แทน
+  function noVoice(msg) {
+    G.hintMode = true;
+    const n = $('notice');
+    n.innerHTML = `${msg} <button type="button">ตกลง</button>`;
+    n.hidden = false;
+    n.querySelector('button').addEventListener('click', () => { n.hidden = true; });
+    if (G.target) $('hubText').textContent = G.target;
+  }
+  if (!Voice.ok) noVoice('🔇 เบราว์เซอร์นี้อ่านออกเสียงไม่ได้ จะแสดงตัวอักษรให้ดูแทน (แนะนำเปิดด้วย Chrome หรือ Safari)');
+  else setTimeout(() => { if (!Voice.hasEnglish()) noVoice('🔇 ไม่พบเสียงภาษาอังกฤษในเครื่อง จะแสดงตัวอักษรให้ดูแทน (แนะนำเปิดด้วย Chrome หรือ Safari)'); }, 2500);
+
+  fitKeys();
+})();
+</script>
+</body>
+</html>

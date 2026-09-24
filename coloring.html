@@ -1,0 +1,1131 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#8f6cf4">
+<meta name="description" content="โลกสีรุ้ง เกมระบายสีสำหรับเด็ก เทสีด้วยถังสีหรือระบายด้วยพู่กัน">
+<title>โลกสีรุ้ง · เกมระบายสี</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   โลกสีรุ้ง · เกมระบายสี (ไฟล์เดียวจบ)
+   โครงสร้าง: CSS → HTML → JavaScript
+   ภาพใช้ Canvas 2 ชั้น: #paint (ชั้นสี) อยู่ล่าง, #lines (เส้นขอบดำ) อยู่บนสุดเสมอ
+   ============================================================ */
+:root{
+  --ink:#1f2a44; --purple:#8f6cf4; --purple-d:#5b3fc4; --yellow:#ffd23f;
+  --current:#ff4f5e; --custom:#ffffff;
+  --shadow:0 6px 0 rgba(58,40,140,.22);
+  font-family:Kanit,Tahoma,sans-serif; color:var(--ink); font-synthesis:none;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden}
+body{
+  background:
+    radial-gradient(circle at 8% 12%,rgba(255,246,201,.95) 0 55px,transparent 56px),
+    radial-gradient(circle at 92% 88%,rgba(255,214,236,.8) 0 90px,transparent 91px),
+    linear-gradient(160deg,#c9ecff 0%,#e6dcff 55%,#ffe3f1 100%);
+  -webkit-user-select:none;user-select:none;overscroll-behavior:none;-webkit-touch-callout:none;
+}
+button,input,a{font:inherit;color:inherit;-webkit-tap-highlight-color:transparent}
+button{cursor:pointer}
+button:focus-visible,a:focus-visible,input:focus-visible+.switch{outline:4px solid #fff;outline-offset:3px}
+[hidden]{display:none!important}
+
+/* ---------- โครงหน้าจอ ---------- */
+.app{
+  height:100vh;height:100dvh;display:grid;gap:12px;
+  grid-template-columns:minmax(0,1fr) clamp(260px,26vw,340px);
+  grid-template-rows:auto minmax(0,1fr);
+  grid-template-areas:"top top" "stage panel";
+  padding:max(10px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));
+}
+.topbar{grid-area:top;display:flex;align-items:center;gap:10px;min-width:0}
+.top-actions{display:flex;gap:8px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:48px;padding:6px 16px;border:3px solid #fff;border-radius:16px;background:#fff;color:var(--purple-d);font-weight:800;font-size:18px;box-shadow:var(--shadow);text-decoration:none;white-space:nowrap;transition:transform .12s,box-shadow .12s}
+.btn:active{transform:translateY(3px);box-shadow:0 3px 0 rgba(58,40,140,.22)}
+.btn.icon{width:52px;padding:0;font-size:22px}
+.btn.gallery{background:var(--yellow);color:#6a4200;box-shadow:0 6px 0 #d19a12}
+.btn.gallery:active{box-shadow:0 3px 0 #d19a12}
+.title{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;line-height:1.1;text-align:center}
+.title strong{font-size:clamp(24px,2.8vw,36px);font-weight:800;color:#fff;-webkit-text-stroke:6px var(--purple-d);paint-order:stroke fill;letter-spacing:.01em}
+.title span{margin-top:4px;font-size:15px;font-weight:600;color:var(--purple-d);background:rgba(255,255,255,.8);border-radius:999px;padding:1px 12px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ---------- พื้นที่วาด ---------- */
+.stage-wrap{grid-area:stage;min-width:0;min-height:0;display:grid;place-items:center;padding:8px}
+.stage{position:relative;width:640px;height:480px;border-radius:22px;background:#fff;overflow:hidden;touch-action:none;cursor:crosshair;
+  box-shadow:0 0 0 6px #fff,0 10px 0 6px rgba(91,63,196,.28),0 24px 40px rgba(91,63,196,.22)}
+.stage.brush-mode{cursor:none}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+#lines{pointer-events:none}
+.cursor{position:absolute;left:0;top:0;border-radius:50%;border:2px solid rgba(31,42,68,.85);box-shadow:0 0 0 2px rgba(255,255,255,.9);pointer-events:none;transform:translate(-50%,-50%);display:none}
+.hint{position:absolute;left:50%;bottom:12px;transform:translate(-50%,8px);opacity:0;padding:6px 16px;border-radius:999px;background:rgba(31,42,68,.86);color:#fff;font-size:clamp(13px,1.5vw,17px);font-weight:600;white-space:nowrap;pointer-events:none;transition:.3s}
+.hint.show{opacity:1;transform:translate(-50%,0)}
+
+/* ---------- แผงเครื่องมือ ---------- */
+.panel{grid-area:panel;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:14px;padding:14px;border:4px solid #fff;border-radius:24px;background:rgba(255,255,255,.74);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);box-shadow:var(--shadow)}
+.sec{display:flex;flex-direction:column;gap:8px}
+.sec-title{margin:0;font-size:15px;font-weight:800;color:var(--purple-d)}
+.modes{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mode{display:flex;flex-direction:column;align-items:center;padding:8px 6px;border:3px solid #fff;border-radius:18px;background:#eef0ff;font-weight:800;font-size:17px;color:#46508a;box-shadow:0 4px 0 #c3c9f0;transition:transform .12s}
+.mode .ico{font-size:30px;line-height:1.15}
+.mode[aria-pressed=true]{background:linear-gradient(160deg,#a78dff,#7b5cf0);color:#fff;box-shadow:0 4px 0 #4d33ad}
+.mode:active{transform:translateY(2px)}
+.brush-box{display:flex;flex-direction:column;gap:10px;padding:10px 12px;border-radius:16px;background:#f5f2ff;border:2px dashed #d6ccff;transition:opacity .2s}
+.brush-box.dim{opacity:.55}
+.size-row{display:flex;align-items:center;gap:10px}
+.size-row label{font-size:15px;font-weight:600;white-space:nowrap}
+.size-dot{width:44px;height:44px;flex:none;display:grid;place-items:center;border-radius:12px;background:#fff;box-shadow:inset 0 0 0 2px #e6e0ff}
+.size-dot i{display:block;border-radius:50%;background:var(--current);box-shadow:0 0 0 2px rgba(0,0,0,.12)}
+input[type=range]{-webkit-appearance:none;appearance:none;flex:1;width:60px;min-width:60px;height:34px;background:transparent;margin:0}
+input[type=range]::-webkit-slider-runnable-track{height:12px;border-radius:99px;background:linear-gradient(90deg,#d8ceff,#8f6cf4)}
+input[type=range]::-moz-range-track{height:12px;border-radius:99px;background:linear-gradient(90deg,#d8ceff,#8f6cf4)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:30px;height:30px;margin-top:-9px;border-radius:50%;background:#fff;border:4px solid var(--purple-d);box-shadow:0 3px 0 rgba(0,0,0,.2)}
+input[type=range]::-moz-range-thumb{width:24px;height:24px;border-radius:50%;background:#fff;border:4px solid var(--purple-d)}
+.guard{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:600;cursor:pointer}
+.guard input{position:absolute;opacity:0;width:1px;height:1px}
+.switch{position:relative;flex:none;width:52px;height:30px;border-radius:99px;background:#cfd3e8;transition:.2s}
+.switch:after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;box-shadow:0 2px 3px rgba(0,0,0,.25);transition:.2s}
+.guard input:checked+.switch{background:#2dbe6c}
+.guard input:checked+.switch:after{left:25px}
+.short{display:none}
+.palette{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:8px}
+.swatch{position:relative;aspect-ratio:1;width:100%;border-radius:50%;border:3px solid #fff;padding:0;box-shadow:0 3px 0 rgba(0,0,0,.18),inset 0 -5px 0 rgba(0,0,0,.1);transition:transform .12s}
+.swatch.white{border-color:#dcdff0}
+.swatch[aria-pressed=true]{transform:scale(1.14);box-shadow:0 0 0 4px var(--purple),0 3px 0 rgba(0,0,0,.18)}
+.swatch.custom{background:conic-gradient(#ff4f5e,#ffd23f,#2dbe6c,#3ccfc4,#3d5afe,#9b5de5,#ff7eb6,#ff4f5e)}
+.swatch.custom i{position:absolute;inset:7px;border-radius:50%;background:var(--custom);border:2px solid #fff;display:grid;place-items:center;font-style:normal;font-size:15px;font-weight:800;color:#5b3fc4}
+.swatch.custom input{position:absolute;inset:0;width:100%;height:100%;opacity:0;border:0;padding:0;cursor:pointer}
+.actions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:auto}
+.act{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;border:3px solid #fff;border-radius:16px;font-weight:800;font-size:15px;color:#fff;transition:transform .12s}
+.act .ico{font-size:24px;line-height:1.1}
+.act:active{transform:translateY(3px)}
+.act.undo{background:#4da8ff;box-shadow:0 4px 0 #2c73bd}
+.act.clear{background:#ff7a7a;box-shadow:0 4px 0 #c94747}
+.act.save{background:#2dbe6c;box-shadow:0 4px 0 #1b8747}
+.act:disabled{opacity:.45;cursor:default;transform:none}
+
+/* ---------- หน้าต่างลอย ---------- */
+.modal{position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:16px;background:rgba(40,24,110,.45);-webkit-backdrop-filter:blur(5px);backdrop-filter:blur(5px)}
+.sheet{width:min(960px,100%);max-height:100%;overflow:auto;border:5px solid #fff;border-radius:30px;background:linear-gradient(170deg,#fffbe6,#ffe8f4);box-shadow:0 12px 0 rgba(91,63,196,.35);padding:18px 20px 22px}
+.sheet.small{width:min(520px,100%);text-align:center}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.sheet h2{margin:0;font-size:clamp(22px,3vw,32px);color:var(--purple-d);line-height:1.2}
+.pics{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:14px}
+.pic{display:flex;flex-direction:column;gap:6px;padding:8px 8px 10px;border:4px solid #fff;border-radius:22px;background:#fff;box-shadow:0 6px 0 rgba(91,63,196,.2);font-weight:800;font-size:18px;color:var(--purple-d);transition:transform .15s}
+.pic:hover{transform:translateY(-3px)}
+.pic canvas{width:100%;aspect-ratio:4/3;height:auto;border-radius:14px;background:#fff;box-shadow:inset 0 0 0 2px #eee}
+.pic[aria-current=true]{border-color:var(--yellow);box-shadow:0 0 0 4px var(--purple),0 6px 0 rgba(91,63,196,.2)}
+.saved img{display:block;width:100%;margin:12px 0;border-radius:18px;border:4px solid #fff;box-shadow:0 6px 0 rgba(91,63,196,.2);background:#fff}
+.saved p{margin:0 0 14px;font-size:16px;line-height:1.45}
+.btn.wide{width:100%;background:var(--purple);color:#fff;box-shadow:0 6px 0 var(--purple-d)}
+.toast{position:fixed;left:50%;bottom:max(18px,env(safe-area-inset-bottom));z-index:30;transform:translate(-50%,20px);opacity:0;padding:10px 18px;border-radius:999px;background:rgba(31,42,68,.92);color:#fff;font-weight:600;font-size:16px;transition:.25s;pointer-events:none;max-width:calc(100% - 24px);text-align:center}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* ---------- จอแนวตั้ง (มือถือ / แท็บเล็ต) ---------- */
+@media (orientation:portrait){
+  .app{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto minmax(0,1fr);grid-template-areas:"top" "stage" "panel";gap:10px}
+  .stage-wrap{height:min(calc((100vw - 24px) * .75 + 16px),60vh)}
+  .panel{gap:10px;padding:10px;align-self:start;max-height:100%}
+  .sec-title{display:none}
+  .mode{flex-direction:row;justify-content:center;gap:8px;font-size:17px;padding:6px}
+  .mode .ico{font-size:26px}
+  .brush-box{flex-direction:row;align-items:center;flex-wrap:wrap;padding:6px 10px;gap:6px 12px}
+  .size-row{flex:1 1 110px;min-width:0}
+  .size-row label,.long{display:none}.short{display:inline}
+  .size-dot{width:36px;height:36px}
+  .guard{font-size:14px;gap:8px}
+  .palette{grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:8px}
+  .actions{margin-top:0}
+}
+@media (orientation:portrait) and (max-height:740px){
+  .palette{grid-template-columns:repeat(auto-fill,minmax(33px,1fr));gap:6px}
+  .mode{padding:4px;font-size:15px}.mode .ico{font-size:22px}
+  .act{padding:5px 4px;font-size:14px}.act .ico{font-size:20px}
+}
+@media (max-width:620px){
+  .btn span{display:none}
+  .btn{padding:6px 12px;min-height:44px}
+  .btn.icon{width:46px}
+  .title strong{font-size:24px}
+  .title span{font-size:13px}
+}
+/* ---------- จอแนวนอนเตี้ย (มือถือแนวนอน) ---------- */
+@media (orientation:landscape) and (max-height:520px){
+  .app{gap:8px;padding-top:max(6px,env(safe-area-inset-top));padding-bottom:max(6px,env(safe-area-inset-bottom));grid-template-columns:minmax(0,1fr) clamp(230px,34vw,300px)}
+  .btn{min-height:40px;font-size:15px;padding:4px 10px;border-width:2px;box-shadow:0 4px 0 rgba(58,40,140,.22)}
+  .btn span{display:none}
+  .btn.icon{width:42px;font-size:19px}
+  .title strong{font-size:22px;-webkit-text-stroke-width:5px}
+  .title span{font-size:12px;margin-top:1px}
+  .stage-wrap{padding:6px}
+  .panel{gap:8px;padding:8px;border-width:3px;border-radius:18px}
+  .sec{gap:6px}
+  .sec-title{display:none}
+  .mode{flex-direction:row;justify-content:center;gap:6px;font-size:14px;padding:4px}
+  .mode .ico{font-size:22px}
+  .brush-box{padding:6px 8px;gap:4px}
+  .size-row label,.long{display:none}.short{display:inline}
+  .size-dot{width:32px;height:32px}
+  .guard{font-size:13px}
+  .palette{grid-template-columns:repeat(auto-fill,minmax(30px,1fr));gap:6px}
+  .act{font-size:12px;padding:4px 2px;border-width:2px}
+  .act .ico{font-size:18px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <a class="btn" href="index.html" aria-label="กลับหน้ารวมเกม">←<span> เกมทั้งหมด</span></a>
+    <div class="title"><strong>โลกสีรุ้ง</strong><span id="picName">เลือกภาพระบายสี</span></div>
+    <div class="top-actions">
+      <button type="button" class="btn gallery" id="galleryBtn" aria-label="เลือกภาพ">🖼️<span> เลือกภาพ</span></button>
+      <button type="button" class="btn icon" id="soundBtn" aria-label="ปิดเสียง">🔊</button>
+      <button type="button" class="btn icon" id="fsBtn" aria-label="เต็มจอ">⛶</button>
+    </div>
+  </header>
+
+  <main class="stage-wrap" id="stageWrap">
+    <div class="stage" id="stage">
+      <canvas id="paint" aria-label="ภาพระบายสี"></canvas>
+      <canvas id="lines" aria-hidden="true"></canvas>
+      <div class="cursor" id="cursor"></div>
+      <div class="hint" id="hint"></div>
+    </div>
+  </main>
+
+  <aside class="panel" aria-label="เครื่องมือระบายสี">
+    <div class="sec tools">
+      <p class="sec-title">โหมดระบาย</p>
+      <div class="modes" role="group" aria-label="เลือกโหมดระบาย">
+        <button type="button" class="mode" data-mode="fill" aria-pressed="true"><span class="ico">🪣</span><span>ถังสี</span></button>
+        <button type="button" class="mode" data-mode="brush" aria-pressed="false"><span class="ico">🖌️</span><span>พู่กัน</span></button>
+      </div>
+      <div class="brush-box dim" id="brushBox">
+        <div class="size-row">
+          <label for="size">ขนาดพู่กัน</label>
+          <input id="size" type="range" min="6" max="90" step="1" value="30" aria-label="ขนาดพู่กัน">
+          <span class="size-dot" aria-hidden="true"><i id="sizeDot"></i></span>
+        </div>
+        <label class="guard"><input type="checkbox" id="guard"><span class="switch" aria-hidden="true"></span><span>🛡️ <span class="long">ระบายไม่เลอะนอกเส้น</span><span class="short">ไม่เลอะ</span></span></label>
+      </div>
+    </div>
+    <div class="sec">
+      <p class="sec-title">จานสี</p>
+      <div class="palette" id="palette" role="group" aria-label="จานสี"></div>
+    </div>
+    <div class="actions">
+      <button type="button" class="act undo" id="undoBtn" disabled><span class="ico">↶</span><span>ย้อนกลับ</span></button>
+      <button type="button" class="act clear" id="clearBtn"><span class="ico">🧽</span><span>ล้างภาพ</span></button>
+      <button type="button" class="act save" id="saveBtn"><span class="ico">📥</span><span>บันทึกรูป</span></button>
+    </div>
+  </aside>
+</div>
+
+<div class="modal" id="gallery" hidden role="dialog" aria-modal="true" aria-labelledby="galleryTitle">
+  <div class="sheet">
+    <div class="sheet-head">
+      <h2 id="galleryTitle">🖼️ เลือกภาพที่อยากระบาย</h2>
+      <div class="top-actions">
+        <a class="btn" href="index.html" aria-label="กลับหน้ารวมเกม">←<span> เกมทั้งหมด</span></a>
+        <button type="button" class="btn icon" id="galleryClose" aria-label="ปิด">✕</button>
+      </div>
+    </div>
+    <div class="pics" id="pics"></div>
+  </div>
+</div>
+
+<div class="modal" id="savedModal" hidden role="dialog" aria-modal="true" aria-labelledby="savedTitle">
+  <div class="sheet small saved">
+    <h2 id="savedTitle">🎉 บันทึกรูปแล้ว!</h2>
+    <img id="savedImg" alt="ภาพที่ระบายเสร็จ">
+    <p>ถ้าไฟล์ไม่ลงเครื่อง (เช่น เปิดผ่านแอปแชต) ให้กดค้างที่รูปแล้วเลือก “บันทึกรูปภาพ”</p>
+    <button type="button" class="btn wide" id="savedClose">ระบายต่อ</button>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+  'use strict';
+
+  /* ============================================================
+     1) ค่าคงที่
+     ภาพทุกภาพออกแบบในพิกัด 1200 × 900 แล้วขยาย S เท่าลง Canvas
+     ============================================================ */
+  const DW = 1200, DH = 900, S = 1.2;
+  const CW = Math.round(DW * S), CH = Math.round(DH * S);
+  const TAU = Math.PI * 2;
+  const INK = [28, 30, 48];              // สีเส้นขอบ (เกือบดำ)
+  const BARRIER = 110;                   // ความทึบของเส้นที่ถือว่าเป็น "กำแพง" กันสีทะลุ
+  const TOLERANCE = 48;                  // ความต่างของสีที่ยังนับว่าเป็นพื้นที่เดียวกัน
+  const STORE = 'rainbow-coloring:';
+  const SOUND_KEY = 'playground-sound';
+  const UNDO_LIMIT = 40, UNDO_BYTES = 90e6;
+
+  const COLORS = [
+    ['#FF4F5E', 'แดง'], ['#FF8A3D', 'ส้ม'], ['#FFD23F', 'เหลือง'], ['#A6E05A', 'เขียวอ่อน'],
+    ['#2DBE6C', 'เขียว'], ['#3CCFC4', 'เขียวฟ้า'], ['#4DA8FF', 'ฟ้า'], ['#3D5AFE', 'น้ำเงิน'],
+    ['#9B5DE5', 'ม่วง'], ['#FF7EB6', 'ชมพู'], ['#FFC9A8', 'สีพีช'], ['#A0643C', 'น้ำตาล'],
+    ['#4A4E69', 'เทาเข้ม'], ['#FFFFFF', 'ขาว (ใช้ลบสี)']
+  ];
+
+  const $ = id => document.getElementById(id);
+  const paint = $('paint'), lines = $('lines'), stage = $('stage'), stageWrap = $('stageWrap');
+  paint.width = lines.width = CW; paint.height = lines.height = CH;
+  const pctx = paint.getContext('2d', { willReadFrequently: true });
+  const lctx = lines.getContext('2d');
+
+  const LITTLE_ENDIAN = new Uint8Array(new Uint32Array([0x0a0b0c0d]).buffer)[0] === 0x0d;
+  const pack = (r, g, b) => (LITTLE_ENDIAN ? ((255 << 24) | (b << 16) | (g << 8) | r) : ((r << 24) | (g << 16) | (b << 8) | 255)) >>> 0;
+  const unpack = v => LITTLE_ENDIAN ? [v & 255, (v >>> 8) & 255, (v >>> 16) & 255] : [(v >>> 24) & 255, (v >>> 16) & 255, (v >>> 8) & 255];
+  const hexToRgb = hex => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  /* ============================================================
+     2) ชุดคำสั่งวาดลายเส้น
+     ทุกชิ้นถูก "เติมขาวแล้วลากเส้นดำ" ตามลำดับหลังไปหน้า ชิ้นหน้าจึงบังเส้นของชิ้นหลัง
+     จากนั้นแปลงความขาวเป็นความโปร่งใส ได้ชั้นเส้นขอบที่วางทับชั้นสี
+     ============================================================ */
+  function rrPath(c, x, y, w, h, r) {
+    r = Math.max(0, Math.min(r, w / 2, h / 2));
+    c.moveTo(x + r, y); c.lineTo(x + w - r, y); c.arcTo(x + w, y, x + w, y + r, r);
+    c.lineTo(x + w, y + h - r); c.arcTo(x + w, y + h, x + w - r, y + h, r);
+    c.lineTo(x + r, y + h); c.arcTo(x, y + h, x, y + h - r, r);
+    c.lineTo(x, y + r); c.arcTo(x, y, x + r, y, r); c.closePath();
+  }
+
+  function makeArtist(c) {
+    const A = {
+      c,
+      w(v) { c.lineWidth = v; return A; },
+      shape(build, fill = '#fff') {
+        c.beginPath(); build();
+        if (fill) { c.fillStyle = fill; c.fill(); }
+        c.stroke(); return A;
+      },
+      circle(x, y, r, fill) { return A.shape(() => c.arc(x, y, r, 0, TAU), fill); },
+      ellipse(x, y, rx, ry, rot = 0, fill) { return A.shape(() => c.ellipse(x, y, rx, ry, rot, 0, TAU), fill); },
+      rect(x, y, w, h, r = 0, fill) { return A.shape(() => rrPath(c, x, y, w, h, r), fill); },
+      poly(pts, fill) {
+        return A.shape(() => { c.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) c.lineTo(pts[i][0], pts[i][1]); c.closePath(); }, fill);
+      },
+      path(fn, fill) { return A.shape(() => fn(c), fill); },
+      line(...pts) { c.beginPath(); c.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) c.lineTo(pts[i][0], pts[i][1]); c.stroke(); return A; },
+      stroke(fn) { c.beginPath(); fn(c); c.stroke(); return A; },
+      dot(x, y, r, fill = '#000') { c.beginPath(); c.arc(x, y, r, 0, TAU); c.fillStyle = fill; c.fill(); return A; },
+      // ท่อมีขอบ: ลากเส้นดำหนาแล้วทับด้วยเส้นขาวที่บางกว่า ได้รูปทรงโค้งที่มีขอบปิด (หาง แผงคอ ปลอกคอ)
+      tube(fn, outer) {
+        const lw = c.lineWidth;
+        c.beginPath(); fn(c); c.lineWidth = outer; c.strokeStyle = '#000'; c.stroke();
+        c.lineWidth = outer - lw * 2; c.strokeStyle = '#fff'; c.stroke();
+        c.lineWidth = lw; c.strokeStyle = '#000'; return A;
+      },
+      // กลุ่มวงกลมที่รวมเป็นก้อนเดียว (เมฆ พุ่มไม้) มีแต่เส้นขอบรอบนอก
+      blob(circles) {
+        const lw = c.lineWidth; c.lineWidth = lw * 2;
+        for (const [x, y, r] of circles) { c.beginPath(); c.arc(x, y, r, 0, TAU); c.stroke(); }
+        c.fillStyle = '#fff';
+        for (const [x, y, r] of circles) { c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill(); }
+        c.lineWidth = lw; return A;
+      },
+      // วาดเส้นเฉพาะภายในรูปทรง เพื่อแบ่งช่องให้ปลายเส้นชนขอบพอดี
+      clipped(clipFn, drawFn) { c.save(); c.beginPath(); clipFn(c); c.clip(); drawFn(); c.restore(); return A; },
+      star(cx, cy, R, r, fill) {
+        const pts = [];
+        for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r : R; pts.push([cx + Math.cos(a) * rr, cy + Math.sin(a) * rr]); }
+        return A.poly(pts, fill);
+      },
+      heart(cx, cy, s, fill) {
+        return A.path(k => {
+          k.moveTo(cx, cy + s * 0.9);
+          k.bezierCurveTo(cx - s * 1.5, cy + s * 0.05, cx - s * 0.95, cy - s * 1.05, cx, cy - s * 0.4);
+          k.bezierCurveTo(cx + s * 0.95, cy - s * 1.05, cx + s * 1.5, cy + s * 0.05, cx, cy + s * 0.9);
+          k.closePath();
+        }, fill);
+      },
+      cloud(x, y, s) {
+        return A.blob([[x - 62 * s, y + 12 * s, 40 * s], [x - 18 * s, y - 16 * s, 54 * s], [x + 38 * s, y - 4 * s, 46 * s], [x + 80 * s, y + 16 * s, 32 * s], [x + 10 * s, y + 24 * s, 42 * s]]);
+      },
+      sun(x, y, r) {
+        for (let i = 0; i < 8; i++) {
+          const a = i * TAU / 8;
+          A.line([x + Math.cos(a) * (r + 18), y + Math.sin(a) * (r + 18)], [x + Math.cos(a) * (r + 46), y + Math.sin(a) * (r + 46)]);
+        }
+        A.circle(x, y, r);
+        A.dot(x - r * 0.33, y - r * 0.12, r * 0.09).dot(x + r * 0.33, y - r * 0.12, r * 0.09);
+        return A.stroke(k => k.arc(x, y + r * 0.08, r * 0.4, 0.35, Math.PI - 0.35));
+      },
+      flower(x, y, s = 1) {
+        A.line([x, y + 18 * s], [x, y + 82 * s]);
+        A.ellipse(x + 20 * s, y + 58 * s, 18 * s, 9 * s, -0.5);
+        for (let i = 0; i < 5; i++) { const a = -Math.PI / 2 + i * TAU / 5; A.circle(x + Math.cos(a) * 25 * s, y + Math.sin(a) * 25 * s, 17 * s); }
+        return A.circle(x, y, 15 * s);
+      },
+      bigFlower(x, y, s = 1) {
+        A.line([x, y + 40 * s], [x, y + 232 * s]);
+        A.ellipse(x - 40 * s, y + 150 * s, 42 * s, 17 * s, 0.5);
+        A.ellipse(x + 40 * s, y + 200 * s, 42 * s, 17 * s, -0.5);
+        for (let i = 0; i < 8; i++) { const a = i * TAU / 8; A.ellipse(x + Math.cos(a) * 54 * s, y + Math.sin(a) * 54 * s, 40 * s, 24 * s, a); }
+        return A.circle(x, y, 36 * s);
+      },
+      horse(x, y, s, dir) {
+        c.save(); c.translate(x, y); c.scale(s * dir, s);
+        const lw = c.lineWidth; c.lineWidth = lw / s;
+        const leg = (px, py, rot) => {
+          c.save(); c.translate(px, py); c.rotate(rot);
+          A.rect(-15, -6, 30, 100, 13); A.line([-15, 74], [15, 74]);
+          c.restore();
+        };
+        A.tube(k => { k.moveTo(-98, -14); k.bezierCurveTo(-152, -10, -168, 56, -140, 94); }, 46);
+        leg(-74, 18, 0.22); leg(-44, 24, 0.02); leg(56, 20, -0.5); leg(84, 22, -0.12);
+        A.ellipse(0, 0, 112, 54);
+        A.path(k => { k.moveTo(52, -28); k.quadraticCurveTo(72, -98, 108, -128); k.lineTo(152, -98); k.quadraticCurveTo(122, -58, 106, 8); k.closePath(); });
+        A.tube(k => { k.moveTo(104, -146); k.quadraticCurveTo(64, -104, 44, -32); }, 42);
+        A.poly([[104, -132], [110, -176], [132, -136]]);
+        A.ellipse(142, -106, 58, 33, 0.6);
+        A.dot(134, -114, 7).dot(180, -80, 4.5);
+        A.path(k => { k.moveTo(-44, -42); k.quadraticCurveTo(0, -66, 44, -42); k.quadraticCurveTo(48, 10, 0, 20); k.quadraticCurveTo(-48, 10, -44, -42); k.closePath(); });
+        A.star(0, -12, 19, 8);
+        c.lineWidth = lw; c.restore(); return A;
+      }
+    };
+    return A;
+  }
+
+  /* ============================================================
+     3) ภาพลายเส้น (วาดด้วยโค้ดทั้งหมด ไม่โหลดรูปจากภายนอก)
+     ============================================================ */
+  const PICTURES = [
+    {
+      id: 'house', name: 'บ้านน้อยแสนสุข', emoji: '🏡',
+      draw(A) {
+        A.sun(1045, 140, 62);
+        A.cloud(250, 150, 1.05); A.cloud(730, 100, 0.75);
+        A.stroke(c => { c.moveTo(-20, 655); c.bezierCurveTo(320, 585, 820, 705, 1220, 615); });
+        A.rect(112, 470, 58, 240, 10);
+        A.blob([[140, 360, 92], [70, 420, 60], [212, 420, 62], [140, 455, 66]]);
+        A.blob([[945, 705, 50], [1010, 686, 58], [1080, 708, 46]]);
+        A.rect(700, 235, 66, 130, 6); A.rect(688, 218, 90, 30, 8);
+        A.rect(330, 420, 540, 360, 10);
+        A.poly([[285, 445], [600, 190], [915, 445]]);
+        A.circle(600, 350, 44); A.line([556, 350], [644, 350]); A.line([600, 306], [600, 394]);
+        for (const x of [385, 703]) {
+          A.rect(x, 500, 112, 100, 10); A.line([x + 56, 500], [x + 56, 600]); A.line([x, 550], [x + 112, 550]);
+          A.rect(x - 10, 598, 132, 28, 8);
+        }
+        A.path(c => { c.moveTo(540, 780); c.lineTo(540, 612); c.arc(600, 612, 60, Math.PI, 0); c.lineTo(660, 780); c.closePath(); });
+        A.dot(640, 700, 8);
+        A.poly([[545, 780], [655, 780], [770, 925], [430, 925]]);
+        A.flower(190, 790, 1); A.flower(960, 815, 1.05); A.flower(1120, 800, 0.9);
+      }
+    },
+    {
+      id: 'cat', name: 'น้องแมวเหมียว', emoji: '🐱',
+      draw(A) {
+        A.line([-20, 700], [1220, 700]);
+        A.rect(80, 90, 250, 210, 16); A.line([205, 90], [205, 300]); A.line([80, 195], [330, 195]);
+        A.rect(900, 110, 190, 150, 14); A.heart(995, 192, 40);
+        A.ellipse(600, 800, 430, 72);
+        A.path(c => { c.moveTo(120, 745); c.lineTo(300, 745); c.lineTo(276, 812); c.lineTo(144, 812); c.closePath(); });
+        A.ellipse(210, 745, 90, 16);
+        A.stroke(c => { c.moveTo(930, 780); c.bezierCurveTo(880, 830, 850, 770, 790, 845); });
+        A.circle(990, 730, 72);
+        A.clipped(c => c.arc(990, 730, 72, 0, TAU), () => {
+          A.stroke(c => { c.moveTo(900, 690); c.quadraticCurveTo(990, 745, 1080, 670); });
+          A.stroke(c => { c.moveTo(905, 770); c.quadraticCurveTo(995, 700, 1080, 755); });
+          A.stroke(c => { c.moveTo(955, 820); c.quadraticCurveTo(1015, 730, 995, 640); });
+        });
+        A.stroke(c => c.arc(990, 730, 72, 0, TAU));
+        A.tube(c => { c.moveTo(760, 680); c.bezierCurveTo(905, 700, 965, 560, 880, 440); }, 74);
+        A.ellipse(600, 585, 200, 175);
+        A.ellipse(600, 630, 108, 112);
+        A.ellipse(440, 692, 85, 62, -0.2); A.ellipse(760, 692, 85, 62, 0.2);
+        A.rect(510, 612, 78, 160, 38); A.rect(612, 612, 78, 160, 38);
+        for (const x of [536, 562, 638, 664]) A.line([x, 748], [x, 772]);
+        A.poly([[455, 255], [462, 95], [575, 190]]); A.poly([[745, 255], [738, 95], [625, 190]]);
+        A.poly([[482, 222], [488, 138], [545, 186]]); A.poly([[718, 222], [712, 138], [655, 186]]);
+        A.ellipse(600, 305, 190, 160);
+        A.tube(c => { c.moveTo(468, 438); c.quadraticCurveTo(600, 505, 732, 438); }, 50);
+        A.circle(600, 492, 24); A.line([580, 494], [620, 494]); A.dot(600, 504, 5);
+        A.ellipse(530, 290, 36, 44); A.ellipse(670, 290, 36, 44);
+        A.ellipse(535, 298, 19, 28, 0, '#000'); A.ellipse(665, 298, 19, 28, 0, '#000');
+        A.dot(542, 284, 7, '#fff'); A.dot(672, 284, 7, '#fff');
+        A.poly([[582, 345], [618, 345], [600, 366]]);
+        A.stroke(c => { c.moveTo(600, 366); c.lineTo(600, 382); c.quadraticCurveTo(585, 402, 564, 386); c.moveTo(600, 382); c.quadraticCurveTo(615, 402, 636, 386); });
+        A.circle(470, 362, 22); A.circle(730, 362, 22);
+        A.w(6).line([452, 338], [350, 320]).line([452, 356], [344, 360]).line([748, 338], [850, 320]).line([748, 356], [856, 360]).w(9);
+        A.w(10).line([600, 160], [600, 196]).line([566, 168], [572, 200]).line([634, 168], [628, 200]).w(9);
+      }
+    },
+    {
+      id: 'robot', name: 'หุ่นยนต์ใจดี', emoji: '🤖',
+      draw(A) {
+        A.ellipse(185, 295, 92, 26, -0.35, null);
+        A.circle(185, 295, 55);
+        A.stroke(c => c.ellipse(185, 295, 92, 26, -0.35, 0, Math.PI));
+        A.star(1040, 130, 42, 18); A.star(1110, 330, 28, 12); A.star(330, 110, 24, 10); A.star(120, 520, 26, 11);
+        A.stroke(c => { c.moveTo(-20, 790); c.quadraticCurveTo(600, 740, 1220, 790); });
+        A.line([600, 175], [600, 104]); A.circle(600, 86, 24);
+        A.rect(405, 235, 50, 110, 14); A.rect(745, 235, 50, 110, 14);
+        A.rect(325, 455, 82, 215, 40); A.circle(366, 694, 46);
+        A.path(c => { c.save(); c.translate(800, 482); c.rotate(0.75); rrPath(c, -41, -215, 82, 225, 40); c.restore(); });
+        A.circle(960, 318, 46);
+        A.rect(470, 730, 90, 100, 18); A.rect(640, 730, 90, 100, 18);
+        A.rect(440, 815, 150, 62, 28); A.rect(610, 815, 150, 62, 28);
+        A.rect(562, 390, 76, 60, 10);
+        A.rect(400, 440, 400, 320, 46);
+        A.rect(468, 488, 264, 156, 26);
+        A.heart(600, 568, 56);
+        A.circle(520, 702, 24); A.circle(600, 702, 24); A.circle(680, 702, 24);
+        A.rect(440, 170, 320, 230, 52);
+        A.circle(530, 270, 50); A.circle(670, 270, 50);
+        A.circle(530, 274, 22, '#000'); A.circle(670, 274, 22, '#000');
+        A.dot(538, 266, 7, '#fff'); A.dot(678, 266, 7, '#fff');
+        A.rect(525, 335, 150, 42, 16);
+        for (const x of [562, 600, 638]) A.line([x, 335], [x, 377]);
+        A.circle(476, 338, 16); A.circle(724, 338, 16);
+      }
+    },
+    {
+      id: 'carousel', name: 'ม้าหมุนสวนสนุก', emoji: '🎠',
+      draw(A) {
+        const balloon = (x, y, rx, ry, sx, sy) => {
+          A.stroke(c => { c.moveTo(x, y + ry + 10); c.bezierCurveTo(x - 22, y + ry + 60, x + 25, y + ry + 100, sx, sy); });
+          A.poly([[x - 11, y + ry + 14], [x + 11, y + ry + 14], [x, y + ry - 2]]);
+          A.ellipse(x, y, rx, ry);
+          A.ellipse(x - rx * 0.38, y - ry * 0.36, rx * 0.16, ry * 0.26, -0.5);
+        };
+        balloon(118, 230, 50, 62, 150, 460); balloon(215, 150, 44, 56, 150, 460);
+        balloon(1082, 235, 50, 62, 1050, 470); balloon(990, 158, 42, 54, 1050, 470);
+        A.star(335, 118, 26, 11); A.star(868, 104, 22, 9);
+        A.stroke(c => { c.moveTo(-20, 840); c.quadraticCurveTo(600, 805, 1220, 840); });
+        A.line([600, 162], [600, 62]); A.poly([[600, 62], [684, 84], [600, 106]]);
+        for (const x of [380, 600, 820]) A.rect(x - 11, 340, 22, 420, 6);
+        const roof = c => { c.moveTo(262, 330); c.quadraticCurveTo(470, 285, 600, 150); c.quadraticCurveTo(730, 285, 938, 330); c.closePath(); };
+        A.path(roof);
+        A.clipped(roof, () => { for (let k = 1; k < 6; k++) { const x = 262 + k * 676 / 6; A.line([600, 150], [x + (x - 600) * 0.08, 345]); } });
+        A.stroke(roof);
+        A.circle(600, 152, 20);
+        const n = 8, x0 = 262, w = (938 - 262) / n;
+        for (let i = 0; i < n; i++) {
+          const cx = x0 + w * i + w / 2;
+          A.path(c => { c.moveTo(cx + w / 2, 330); c.arc(cx, 330, w / 2, 0, Math.PI); c.closePath(); });
+        }
+        A.horse(380, 560, 0.86, 1);
+        A.horse(820, 520, 0.86, -1);
+        A.circle(600, 610, 56); A.star(600, 614, 38, 16);
+        A.rect(240, 745, 720, 52, 22);
+        A.rect(205, 790, 790, 62, 28);
+        for (let i = 0; i < 10; i++) A.circle(262 + i * 75, 821, 14);
+      }
+    },
+    {
+      id: 'butterfly', name: 'ผีเสื้อในสวนดอกไม้', emoji: '🦋',
+      draw(A) {
+        A.sun(125, 120, 58);
+        A.cloud(1010, 120, 0.95);
+        A.stroke(c => { c.moveTo(-20, 735); c.bezierCurveTo(300, 690, 900, 780, 1220, 720); });
+        for (const x of [120, 430, 770, 1110]) A.line([x - 20, 848], [x, 885]).line([x, 836], [x, 885]).line([x + 20, 848], [x, 885]);
+        A.bigFlower(210, 610, 1.1); A.bigFlower(1000, 640, 1.02);
+        A.ellipse(492, 468, 108, 88, 0.5); A.ellipse(708, 468, 108, 88, -0.5);
+        A.ellipse(468, 298, 158, 118, -0.45); A.ellipse(732, 298, 158, 118, 0.45);
+        A.circle(445, 285, 50); A.circle(755, 285, 50);
+        A.circle(395, 366, 22); A.circle(805, 366, 22);
+        A.circle(488, 480, 32); A.circle(712, 480, 32);
+        const body = c => c.ellipse(600, 395, 34, 150, 0, 0, TAU);
+        A.path(body);
+        A.clipped(body, () => { for (const y of [330, 380, 430, 480]) A.line([550, y], [650, y]); });
+        A.stroke(body);
+        A.stroke(c => { c.moveTo(588, 198); c.quadraticCurveTo(565, 140, 528, 132); });
+        A.stroke(c => { c.moveTo(612, 198); c.quadraticCurveTo(635, 140, 672, 132); });
+        A.circle(522, 130, 15); A.circle(678, 130, 15);
+        A.circle(600, 234, 40);
+        A.dot(586, 230, 6).dot(614, 230, 6);
+        A.stroke(c => c.arc(600, 240, 14, 0.3, Math.PI - 0.3));
+      }
+    }
+  ];
+
+  /* ============================================================
+     4) สร้างชั้นเส้นขอบ + หน้ากากกำแพง (เก็บแคชทีละภาพ)
+     ============================================================ */
+  const artCache = new Map();
+  function getArt(pic) {
+    if (artCache.has(pic.id)) return artCache.get(pic.id);
+    const cv = document.createElement('canvas'); cv.width = CW; cv.height = CH;
+    const c = cv.getContext('2d', { willReadFrequently: true });
+    c.fillStyle = '#fff'; c.fillRect(0, 0, CW, CH);
+    c.setTransform(S, 0, 0, S, 0, 0);
+    c.strokeStyle = '#000'; c.lineJoin = 'round'; c.lineCap = 'round'; c.lineWidth = 9;
+    pic.draw(makeArtist(c));
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    const img = c.getImageData(0, 0, CW, CH), d = img.data, n = CW * CH;
+    const alpha = new Uint8Array(n), mask = new Uint8Array(n);
+    for (let p = 0, i = 0; p < n; p++, i += 4) {
+      const a = 255 - Math.round((d[i] + d[i + 1] + d[i + 2]) / 3);
+      alpha[p] = a; mask[p] = a >= BARRIER ? 1 : 0;
+      d[i] = INK[0]; d[i + 1] = INK[1]; d[i + 2] = INK[2]; d[i + 3] = a;
+    }
+    c.putImageData(img, 0, 0);
+    const art = { canvas: cv, alpha, mask };
+    artCache.set(pic.id, art);
+    return art;
+  }
+
+  /* ============================================================
+     5) Flood Fill แบบ scanline (ไม่ทะลุเส้นขอบ)
+     ============================================================ */
+  function findSeed(x, y, mask, radius) {
+    x = Math.round(x); y = Math.round(y);
+    if (x < 0 || y < 0 || x >= CW || y >= CH) return -1;
+    if (!mask[y * CW + x]) return y * CW + x;
+    for (let r = 1; r <= radius; r++) {                     // นิ้วเด็กแตะโดนเส้น: หาจุดว่างที่ใกล้ที่สุด
+      let best = -1, bestD = Infinity;
+      for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= CW || ny >= CH) continue;
+        const i = ny * CW + nx, dd = dx * dx + dy * dy;
+        if (!mask[i] && dd < bestD) { best = i; bestD = dd; }
+      }
+      if (best >= 0) return best;
+    }
+    return -1;
+  }
+
+  // data32 = สีในชั้นระบาย (ถ้าส่ง null จะหาพื้นที่ตามเส้นขอบอย่างเดียว ใช้กับพู่กันกันเลอะ)
+  function floodRegion(seed, art, data32) {
+    const n = CW * CH, vis = new Uint8Array(n), mask = art.mask;
+    let ok;
+    if (data32) {
+      const [sr, sg, sb] = unpack(data32[seed]);
+      ok = i => {
+        if (vis[i] || mask[i]) return false;
+        const v = data32[i];
+        if (LITTLE_ENDIAN) return Math.abs((v & 255) - sr) <= TOLERANCE && Math.abs(((v >>> 8) & 255) - sg) <= TOLERANCE && Math.abs(((v >>> 16) & 255) - sb) <= TOLERANCE;
+        const [r, g, b] = unpack(v);
+        return Math.abs(r - sr) <= TOLERANCE && Math.abs(g - sg) <= TOLERANCE && Math.abs(b - sb) <= TOLERANCE;
+      };
+    } else {
+      ok = i => !vis[i] && !mask[i];
+    }
+    let minX = CW, minY = CH, maxX = 0, maxY = 0, count = 0;
+    const stack = [seed];
+    while (stack.length) {
+      const i = stack.pop();
+      if (!ok(i)) continue;
+      const y = (i / CW) | 0, row = y * CW;
+      let l = i, r = i;
+      while (l > row && ok(l - 1)) l--;
+      while (r < row + CW - 1 && ok(r + 1)) r++;
+      for (let k = l; k <= r; k++) vis[k] = 1;
+      count += r - l + 1;
+      if (l - row < minX) minX = l - row;
+      if (r - row > maxX) maxX = r - row;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+      for (let ny = y - 1; ny <= y + 1; ny += 2) {
+        if (ny < 0 || ny >= CH) continue;
+        const base = ny * CW;
+        let run = false;
+        for (let k = l - row; k <= r - row; k++) {
+          const j = base + k;
+          if (ok(j)) { if (!run) { stack.push(j); run = true; } } else run = false;
+        }
+      }
+    }
+    return { vis, minX, minY, maxX, maxY, count };
+  }
+
+  // ขยายสีเข้าไปใต้ขอบเส้น 3 พิกเซล จะได้ไม่มีขอบขาวแลบตามรอยเส้น
+  function spreadUnderLines(reg, art, passes = 3) {
+    const { vis } = reg, alpha = art.alpha;
+    for (let p = 0; p < passes; p++) {
+      const x0 = Math.max(0, reg.minX - 1), x1 = Math.min(CW - 1, reg.maxX + 1);
+      const y0 = Math.max(0, reg.minY - 1), y1 = Math.min(CH - 1, reg.maxY + 1);
+      const add = [];
+      for (let y = y0; y <= y1; y++) {
+        const row = y * CW;
+        for (let x = x0; x <= x1; x++) {
+          const i = row + x;
+          if (vis[i] || alpha[i] === 0) continue;
+          if ((x > 0 && vis[i - 1]) || (x < CW - 1 && vis[i + 1]) || (y > 0 && vis[i - CW]) || (y < CH - 1 && vis[i + CW])) add.push(i);
+        }
+      }
+      for (const i of add) vis[i] = 1;
+      reg.minX = x0; reg.maxX = x1; reg.minY = y0; reg.maxY = y1;
+    }
+    return reg;
+  }
+
+  function regionToImage(reg, color32) {
+    const bw = reg.maxX - reg.minX + 1, bh = reg.maxY - reg.minY + 1;
+    const img = new ImageData(bw, bh), out = new Uint32Array(img.data.buffer);
+    for (let y = 0; y < bh; y++) {
+      const src = (reg.minY + y) * CW + reg.minX, dst = y * bw;
+      for (let x = 0; x < bw; x++) if (reg.vis[src + x]) out[dst + x] = color32;
+    }
+    return img;
+  }
+
+  /* ============================================================
+     6) สถานะเกม + ประวัติสำหรับปุ่มย้อนกลับ
+     ============================================================ */
+  const state = { mode: 'fill', color: COLORS[0][0], size: 30, guard: false };
+  let cur = null, ready = false, undoStack = [], undoBytes = 0;
+
+  function pushUndo(entry) {
+    const bytes = entry.img.data.length;
+    undoStack.push(entry); undoBytes += bytes;
+    while (undoStack.length > UNDO_LIMIT || (undoBytes > UNDO_BYTES && undoStack.length > 1)) undoBytes -= undoStack.shift().img.data.length;
+    updateUndo();
+  }
+  function updateUndo() { $('undoBtn').disabled = undoStack.length === 0; }
+  function afterChange() { scheduleSave(); updateUndo(); hideHint(); }
+
+  /* ----- เทสีพร้อมแอนิเมชันวงคลื่น ----- */
+  let anim = null;
+  function doFill(px, py) {
+    finishAnim();
+    const art = cur.art;
+    const seed = findSeed(px, py, art.mask, Math.round(16 * S));
+    if (seed < 0) return;
+    const full = pctx.getImageData(0, 0, CW, CH);
+    const d32 = new Uint32Array(full.data.buffer);
+    const [r, g, b] = hexToRgb(state.color), target = pack(r, g, b);
+    const [sr, sg, sb] = unpack(d32[seed]);
+    if (Math.abs(sr - r) + Math.abs(sg - g) + Math.abs(sb - b) < 6) { Sfx.tone(300, 0.08, 'sine', 0.05); return; }
+    const reg = spreadUnderLines(floodRegion(seed, art, d32), art);
+    if (!reg.count) return;
+    const bw = reg.maxX - reg.minX + 1, bh = reg.maxY - reg.minY + 1;
+    pushUndo({ x: reg.minX, y: reg.minY, img: pctx.getImageData(reg.minX, reg.minY, bw, bh) });
+    const layer = document.createElement('canvas'); layer.width = bw; layer.height = bh;
+    layer.getContext('2d').putImageData(regionToImage(reg, target), 0, 0);
+    const cx = seed % CW, cy = (seed / CW) | 0;
+    const maxR = Math.hypot(Math.max(cx - reg.minX, reg.maxX - cx), Math.max(cy - reg.minY, reg.maxY - cy)) + 2;
+    const dur = Math.min(430, 150 + maxR * 0.32), t0 = performance.now();
+    anim = { layer, x: reg.minX, y: reg.minY, raf: 0 };
+    const me = anim;
+    const step = now => {
+      if (anim !== me) return;
+      const t = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - t, 3);
+      pctx.save(); pctx.beginPath(); pctx.arc(cx, cy, Math.max(2, maxR * e), 0, TAU); pctx.clip();
+      pctx.drawImage(layer, me.x, me.y); pctx.restore();
+      if (t < 1) me.raf = requestAnimationFrame(step); else { anim = null; afterChange(); }
+    };
+    me.raf = requestAnimationFrame(step);
+    Sfx.pop();
+    sparkle(cx, cy);
+  }
+  function finishAnim() {
+    if (!anim) return;
+    cancelAnimationFrame(anim.raf);
+    pctx.drawImage(anim.layer, anim.x, anim.y);
+    anim = null; afterChange();
+  }
+
+  /* ----- พู่กัน ----- */
+  const snap = document.createElement('canvas'); snap.width = CW; snap.height = CH;
+  const snapCtx = snap.getContext('2d', { willReadFrequently: true });
+  const guardCv = document.createElement('canvas'); guardCv.width = CW; guardCv.height = CH;
+  const guardCtx = guardCv.getContext('2d');
+  let stroke = null;
+
+  function guardStyle(px, py) {
+    const art = cur.art;
+    const seed = findSeed(px, py, art.mask, Math.round(10 * S));
+    if (seed < 0) return null;
+    const reg = spreadUnderLines(floodRegion(seed, art, null), art);
+    const [r, g, b] = hexToRgb(state.color);
+    guardCtx.clearRect(0, 0, CW, CH);
+    guardCtx.putImageData(regionToImage(reg, pack(r, g, b)), reg.minX, reg.minY);
+    return pctx.createPattern(guardCv, 'no-repeat');
+  }
+  function applyBrush() {
+    pctx.lineCap = 'round'; pctx.lineJoin = 'round';
+    pctx.lineWidth = state.size * S;
+    pctx.strokeStyle = stroke.style; pctx.fillStyle = stroke.style;
+  }
+  function beginStroke(p) {
+    finishAnim();
+    snapCtx.clearRect(0, 0, CW, CH); snapCtx.drawImage(paint, 0, 0);
+    const style = (state.guard && guardStyle(p.x, p.y)) || state.color;
+    stroke = { last: p, mid: p, minX: p.x, minY: p.y, maxX: p.x, maxY: p.y, style };
+    applyBrush();
+    pctx.beginPath(); pctx.arc(p.x, p.y, state.size * S / 2, 0, TAU); pctx.fill();
+    Sfx.tone(520, 0.05, 'triangle', 0.04);
+  }
+  function extendStroke(p) {
+    const s = stroke;
+    if (Math.hypot(p.x - s.last.x, p.y - s.last.y) < 1.5) return;
+    const mid = { x: (s.last.x + p.x) / 2, y: (s.last.y + p.y) / 2 };
+    applyBrush();
+    pctx.beginPath(); pctx.moveTo(s.mid.x, s.mid.y); pctx.quadraticCurveTo(s.last.x, s.last.y, mid.x, mid.y); pctx.stroke();
+    s.mid = mid; s.last = p;
+    s.minX = Math.min(s.minX, p.x); s.minY = Math.min(s.minY, p.y); s.maxX = Math.max(s.maxX, p.x); s.maxY = Math.max(s.maxY, p.y);
+  }
+  function endStroke() {
+    const s = stroke; if (!s) return;
+    applyBrush();
+    pctx.beginPath(); pctx.moveTo(s.mid.x, s.mid.y); pctx.lineTo(s.last.x, s.last.y); pctx.stroke();
+    const pad = state.size * S / 2 + 4;
+    const x = clamp(Math.floor(s.minX - pad), 0, CW - 1), y = clamp(Math.floor(s.minY - pad), 0, CH - 1);
+    const w = clamp(Math.ceil(s.maxX + pad), 1, CW) - x, h = clamp(Math.ceil(s.maxY + pad), 1, CH) - y;
+    pushUndo({ x, y, img: snapCtx.getImageData(x, y, Math.max(1, w), Math.max(1, h)) });
+    stroke = null;
+    afterChange();
+  }
+
+  /* ----- ปุ่มย้อนกลับ ล้าง บันทึก ----- */
+  function undo() {
+    if (stroke) return;
+    finishAnim();
+    const e = undoStack.pop();
+    if (!e) { toast('ย้อนกลับจนสุดแล้วจ้า'); return; }
+    undoBytes -= e.img.data.length;
+    pctx.putImageData(e.img, e.x, e.y);
+    afterChange();
+    Sfx.tone(520, 0.12, 'triangle', 0.08, 300);
+  }
+  function clearAll() {
+    if (stroke) return;
+    finishAnim();
+    pushUndo({ x: 0, y: 0, img: pctx.getImageData(0, 0, CW, CH) });
+    pctx.fillStyle = '#fff'; pctx.fillRect(0, 0, CW, CH);
+    afterChange();
+    toast('ล้างภาพแล้ว · กด “ย้อนกลับ” เพื่อเอาสีคืนได้');
+    Sfx.tone(900, 0.25, 'sine', 0.07, 200);
+  }
+  function stamp() {
+    const d = new Date(), z = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}-${z(d.getHours())}${z(d.getMinutes())}`;
+  }
+  let savedUrl = null;
+  function download() {
+    if (!cur) return;
+    finishAnim();
+    const out = document.createElement('canvas'); out.width = CW; out.height = CH;
+    const g = out.getContext('2d');
+    g.drawImage(paint, 0, 0); g.drawImage(lines, 0, 0);
+    const name = `rainbow-${cur.pic.id}-${stamp()}.png`;
+    const deliver = (url, revocable) => {
+      const a = document.createElement('a');
+      a.href = url; a.download = name; a.rel = 'noopener';
+      document.body.appendChild(a); a.click(); a.remove();
+      if (savedUrl && savedUrl.revocable) URL.revokeObjectURL(savedUrl.url);
+      savedUrl = { url, revocable };
+      $('savedImg').src = url;
+      openModal('savedModal');
+      Sfx.fanfare();
+    };
+    if (out.toBlob) out.toBlob(b => b ? deliver(URL.createObjectURL(b), true) : deliver(out.toDataURL('image/png'), false), 'image/png');
+    else deliver(out.toDataURL('image/png'), false);
+  }
+
+  /* ============================================================
+     7) บันทึกงานอัตโนมัติในเครื่อง (localStorage)
+     ============================================================ */
+  let saveTimer = 0;
+  function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 700); }
+  function saveNow() {
+    clearTimeout(saveTimer);
+    if (!cur || !ready) return;
+    try { localStorage.setItem(STORE + cur.pic.id, paint.toDataURL('image/png')); } catch (_) { /* เต็มหรือถูกปิด: เล่นต่อได้ตามปกติ */ }
+    drawThumb(cur.pic);
+  }
+  const readSaved = id => { try { return localStorage.getItem(STORE + id); } catch (_) { return null; } };
+
+  function loadPicture(index) {
+    if (stroke) endStroke();
+    if (cur) { finishAnim(); saveNow(); }
+    const pic = PICTURES[index], art = getArt(pic);
+    cur = { pic, art, index };
+    lctx.clearRect(0, 0, CW, CH); lctx.drawImage(art.canvas, 0, 0);
+    pctx.fillStyle = '#fff'; pctx.fillRect(0, 0, CW, CH);
+    undoStack = []; undoBytes = 0; updateUndo();
+    $('picName').textContent = `${pic.emoji} ${pic.name}`;
+    try { localStorage.setItem(STORE + 'last', pic.id); } catch (_) {}
+    document.querySelectorAll('.pic').forEach((b, i) => b.setAttribute('aria-current', String(i === index)));
+    const saved = readSaved(pic.id);
+    ready = !saved;
+    if (saved) {
+      const im = new Image();
+      im.onload = () => { if (cur && cur.pic === pic) { pctx.drawImage(im, 0, 0, CW, CH); ready = true; } };
+      im.onerror = () => { ready = true; };
+      im.src = saved;
+    }
+  }
+
+  /* ============================================================
+     8) แกลเลอรีเลือกภาพ (ภาพย่อแสดงงานที่ระบายไว้)
+     ============================================================ */
+  const thumbs = new Map();
+  function buildGallery() {
+    const box = $('pics');
+    PICTURES.forEach((pic, i) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'pic';
+      const cv = document.createElement('canvas'); cv.width = 320; cv.height = 240;
+      const label = document.createElement('span'); label.textContent = `${pic.emoji} ${pic.name}`;
+      b.append(cv, label);
+      b.addEventListener('click', () => { loadPicture(i); closeModal('gallery'); Sfx.click(); showHint(); });
+      box.appendChild(b);
+      thumbs.set(pic.id, cv);
+    });
+  }
+  function drawThumb(pic) {
+    const cv = thumbs.get(pic.id); if (!cv) return;
+    const g = cv.getContext('2d'), w = cv.width, h = cv.height;
+    const art = getArt(pic);
+    g.fillStyle = '#fff'; g.fillRect(0, 0, w, h);
+    if (cur && cur.pic === pic) { g.drawImage(paint, 0, 0, w, h); g.drawImage(art.canvas, 0, 0, w, h); return; }
+    const saved = readSaved(pic.id);
+    if (!saved) { g.drawImage(art.canvas, 0, 0, w, h); return; }
+    const im = new Image();
+    im.onload = () => { g.drawImage(im, 0, 0, w, h); g.drawImage(art.canvas, 0, 0, w, h); };
+    im.onerror = () => g.drawImage(art.canvas, 0, 0, w, h);
+    im.src = saved;
+  }
+  let galleryDrawn = false;
+  function openGallery() {
+    if (!galleryDrawn) { PICTURES.forEach(drawThumb); galleryDrawn = true; } else if (cur) drawThumb(cur.pic);
+    openModal('gallery');
+  }
+
+  /* ============================================================
+     9) เสียงเอฟเฟกต์ (Web Audio)
+     ============================================================ */
+  const Sfx = {
+    ctx: null,
+    on: (() => { try { return localStorage.getItem(SOUND_KEY) !== '0'; } catch (_) { return true; } })(),
+    tone(freq, dur = 0.1, type = 'sine', vol = 0.08, end = freq, delay = 0) {
+      if (!this.on) return;
+      try {
+        this.ctx = this.ctx || new (window.AudioContext || window.webkitAudioContext)();
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+        const t = this.ctx.currentTime + delay, o = this.ctx.createOscillator(), g = this.ctx.createGain();
+        o.type = type; o.frequency.setValueAtTime(freq, t); o.frequency.exponentialRampToValueAtTime(Math.max(30, end), t + dur);
+        g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        o.connect(g); g.connect(this.ctx.destination); o.start(t); o.stop(t + dur + 0.02);
+      } catch (_) { /* ไม่มีเสียงก็เล่นได้ */ }
+    },
+    pop() { this.tone(420, 0.14, 'sine', 0.12, 900); this.tone(1200, 0.08, 'triangle', 0.03, 1600, 0.05); },
+    click() { this.tone(660, 0.06, 'triangle', 0.06); },
+    fanfare() { [523, 659, 784, 1047].forEach((f, i) => this.tone(f, 0.2, 'triangle', 0.08, f, i * 0.1)); }
+  };
+
+  /* ============================================================
+     10) ส่วนติดต่อผู้ใช้
+     ============================================================ */
+  function buildPalette() {
+    const box = $('palette');
+    COLORS.forEach(([hex, name], i) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'swatch' + (hex === '#FFFFFF' ? ' white' : '');
+      b.style.background = hex; b.dataset.color = hex;
+      b.setAttribute('aria-label', `สี${name}`); b.title = name;
+      b.setAttribute('aria-pressed', String(i === 0));
+      b.addEventListener('click', () => { setColor(hex, b); Sfx.tone(480 + i * 30, 0.07, 'sine', 0.06); });
+      box.appendChild(b);
+    });
+    const custom = document.createElement('label');
+    custom.className = 'swatch custom'; custom.title = 'เลือกสีเอง';
+    custom.setAttribute('aria-pressed', 'false');
+    custom.innerHTML = '<i>+</i><input type="color" value="#7CE0FF" aria-label="เลือกสีเองได้ไม่จำกัด">';
+    const input = custom.querySelector('input');
+    const pick = () => {
+      const hex = input.value.toUpperCase();
+      document.documentElement.style.setProperty('--custom', hex);
+      custom.querySelector('i').textContent = '';
+      setColor(hex, custom);
+    };
+    input.addEventListener('input', pick);
+    input.addEventListener('change', pick);
+    box.appendChild(custom);
+  }
+  function setColor(hex, el) {
+    state.color = hex;
+    document.querySelectorAll('.swatch').forEach(s => s.setAttribute('aria-pressed', String(s === el)));
+    document.documentElement.style.setProperty('--current', hex);
+  }
+  function setMode(mode, quiet) {
+    state.mode = mode;
+    document.querySelectorAll('.mode').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === mode)));
+    stage.classList.toggle('brush-mode', mode === 'brush');
+    $('brushBox').classList.toggle('dim', mode !== 'brush');
+    if (mode !== 'brush') cursorEl.style.display = 'none';
+    if (!quiet) { Sfx.click(); showHint(); }
+  }
+  function setSize(v) {
+    state.size = +v;
+    $('size').value = v;
+    const d = Math.max(5, Math.min(36, v * 0.42));
+    $('sizeDot').style.width = $('sizeDot').style.height = d + 'px';
+  }
+
+  let hintTimer = 0;
+  function showHint() {
+    const h = $('hint');
+    h.textContent = state.mode === 'fill' ? '🪣 แตะช่องว่างในภาพ เพื่อเทสี' : '🖌️ ลากนิ้วหรือเมาส์ เพื่อระบายสี';
+    h.classList.add('show');
+    clearTimeout(hintTimer); hintTimer = setTimeout(hideHint, 3200);
+  }
+  function hideHint() { $('hint').classList.remove('show'); }
+
+  let toastTimer = 0;
+  function toast(msg) {
+    const t = $('toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+  }
+
+  function openModal(id) { $(id).hidden = false; }
+  function closeModal(id) {
+    $(id).hidden = true;
+    if (id === 'savedModal' && savedUrl && savedUrl.revocable) { URL.revokeObjectURL(savedUrl.url); savedUrl = null; }
+  }
+
+  // ประกายเล็ก ๆ ตอนเทสี (วาดบน DOM จึงไม่ปนกับภาพที่บันทึก)
+  function sparkle(cx, cy) {
+    const r = stage.getBoundingClientRect(), k = r.width / CW;
+    for (let i = 0; i < 8; i++) {
+      const s = document.createElement('i');
+      const a = i * TAU / 8, dist = 30 + Math.random() * 25;
+      s.style.cssText = `position:absolute;left:${cx * k}px;top:${cy * k}px;width:10px;height:10px;border-radius:50%;background:${state.color};border:2px solid #fff;pointer-events:none;transform:translate(-50%,-50%);transition:transform .45s ease-out,opacity .45s;`;
+      stage.appendChild(s);
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        s.style.transform = `translate(calc(-50% + ${Math.cos(a) * dist}px), calc(-50% + ${Math.sin(a) * dist}px)) scale(.3)`;
+        s.style.opacity = '0';
+      }));
+      setTimeout(() => s.remove(), 520);
+    }
+  }
+
+  /* ----- ปรับขนาดพื้นที่วาดให้พอดีจอ (อัตราส่วน 4:3) ----- */
+  function fitStage() {
+    const cs = getComputedStyle(stageWrap);
+    const w = stageWrap.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const h = stageWrap.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    let sw = Math.max(80, w), sh = sw * 0.75;
+    if (sh > h) { sh = Math.max(60, h); sw = sh / 0.75; }
+    stage.style.width = Math.floor(sw) + 'px';
+    stage.style.height = Math.floor(sh) + 'px';
+  }
+
+  /* ----- เมาส์ + นิ้ว (Pointer Events และสำรองด้วย Mouse/Touch Events) ----- */
+  const cursorEl = $('cursor');
+  function toCanvas(clientX, clientY) {
+    const r = paint.getBoundingClientRect();
+    return { x: (clientX - r.left) * CW / r.width, y: (clientY - r.top) * CH / r.height };
+  }
+  function moveCursor(clientX, clientY, type) {
+    if (state.mode !== 'brush' || type === 'touch') { cursorEl.style.display = 'none'; return; }
+    const r = stage.getBoundingClientRect(), d = state.size * S * r.width / CW;
+    cursorEl.style.display = 'block';
+    cursorEl.style.width = cursorEl.style.height = Math.max(6, d) + 'px';
+    cursorEl.style.left = (clientX - r.left) + 'px';
+    cursorEl.style.top = (clientY - r.top) + 'px';
+  }
+  function onDown(p) {
+    if (!cur || !ready) return;
+    if (state.mode === 'fill') doFill(p.x, p.y);
+    else beginStroke(p);
+  }
+  function onMove(p) { if (stroke) extendStroke(p); }
+  function onUp() { if (stroke) endStroke(); }
+
+  if (window.PointerEvent) {
+    let active = null;
+    stage.addEventListener('pointerdown', e => {
+      if (active !== null || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      active = e.pointerId;
+      try { stage.setPointerCapture(e.pointerId); } catch (_) {}
+      e.preventDefault();
+      moveCursor(e.clientX, e.clientY, e.pointerType);
+      onDown(toCanvas(e.clientX, e.clientY));
+    });
+    stage.addEventListener('pointermove', e => {
+      moveCursor(e.clientX, e.clientY, e.pointerType);
+      if (e.pointerId !== active) return;
+      const list = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+      if (list.length) list.forEach(ev => onMove(toCanvas(ev.clientX, ev.clientY)));
+      else onMove(toCanvas(e.clientX, e.clientY));
+    });
+    const end = e => { if (e.pointerId !== active) return; active = null; onUp(); };
+    stage.addEventListener('pointerup', end);
+    stage.addEventListener('pointercancel', end);
+    stage.addEventListener('pointerleave', e => { if (e.pointerType !== 'touch') cursorEl.style.display = 'none'; });
+  } else {
+    let mouseDown = false;
+    stage.addEventListener('mousedown', e => { if (e.button !== 0) return; mouseDown = true; onDown(toCanvas(e.clientX, e.clientY)); });
+    window.addEventListener('mousemove', e => { moveCursor(e.clientX, e.clientY, 'mouse'); if (mouseDown) onMove(toCanvas(e.clientX, e.clientY)); });
+    window.addEventListener('mouseup', () => { if (mouseDown) { mouseDown = false; onUp(); } });
+    stage.addEventListener('touchstart', e => { e.preventDefault(); const t = e.changedTouches[0]; onDown(toCanvas(t.clientX, t.clientY)); }, { passive: false });
+    stage.addEventListener('touchmove', e => { e.preventDefault(); const t = e.changedTouches[0]; onMove(toCanvas(t.clientX, t.clientY)); }, { passive: false });
+    stage.addEventListener('touchend', e => { e.preventDefault(); onUp(); }, { passive: false });
+    stage.addEventListener('touchcancel', () => onUp());
+  }
+
+  /* ----- ผูกปุ่มต่าง ๆ ----- */
+  document.querySelectorAll('.mode').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+  $('size').addEventListener('input', e => { setSize(e.target.value); if (state.mode !== 'brush') setMode('brush', true); });
+  $('guard').addEventListener('change', e => { state.guard = e.target.checked; if (state.mode !== 'brush') setMode('brush', true); Sfx.click(); toast(state.guard ? '🛡️ พู่กันจะระบายเฉพาะในช่องที่เริ่มแตะ' : '🖌️ พู่กันระบายได้อิสระ'); });
+  $('undoBtn').addEventListener('click', undo);
+  $('clearBtn').addEventListener('click', clearAll);
+  $('saveBtn').addEventListener('click', download);
+  $('galleryBtn').addEventListener('click', () => { Sfx.click(); openGallery(); });
+  $('galleryClose').addEventListener('click', () => closeModal('gallery'));
+  $('savedClose').addEventListener('click', () => closeModal('savedModal'));
+  ['gallery', 'savedModal'].forEach(id => $(id).addEventListener('click', e => { if (e.target.id === id) closeModal(id); }));
+
+  const soundBtn = $('soundBtn');
+  const paintSound = () => { soundBtn.textContent = Sfx.on ? '🔊' : '🔇'; soundBtn.setAttribute('aria-label', Sfx.on ? 'ปิดเสียง' : 'เปิดเสียง'); };
+  soundBtn.addEventListener('click', () => {
+    Sfx.on = !Sfx.on; paintSound();
+    try { localStorage.setItem(SOUND_KEY, Sfx.on ? '1' : '0'); } catch (_) {}
+    Sfx.click();
+  });
+  paintSound();
+
+  const fsBtn = $('fsBtn');
+  const root = document.documentElement;
+  if (!(root.requestFullscreen || root.webkitRequestFullscreen)) fsBtn.hidden = true;
+  fsBtn.addEventListener('click', () => {
+    const inFs = document.fullscreenElement || document.webkitFullscreenElement;
+    if (inFs) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    else { const req = root.requestFullscreen || root.webkitRequestFullscreen; const r = req.call(root); if (r && r.catch) r.catch(() => {}); }
+  });
+
+  window.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
+    else if (e.key === 'Escape') { closeModal('gallery'); closeModal('savedModal'); }
+    else if (e.key === '[') setSize(Math.max(6, state.size - 4));
+    else if (e.key === ']') setSize(Math.min(90, state.size + 4));
+  });
+  const flush = () => { if (stroke) endStroke(); finishAnim(); saveNow(); };
+  window.addEventListener('pagehide', flush);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
+
+  if (window.ResizeObserver) new ResizeObserver(fitStage).observe(stageWrap);
+  window.addEventListener('resize', fitStage);
+
+  /* ----- เริ่มเกม ----- */
+  buildPalette();
+  buildGallery();
+  setSize(30);
+  setMode('fill', true);
+  fitStage();
+  let last = 0;
+  try { last = Math.max(0, PICTURES.findIndex(p => p.id === localStorage.getItem(STORE + 'last'))); } catch (_) {}
+  loadPicture(last);
+  openGallery();
+})();
+</script>
+</body>
+</html>
